@@ -1,13 +1,10 @@
-from django.conf import settings
-from rest_framework.routers import DefaultRouter
-from rest_framework.routers import SimpleRouter
+from django.urls import include
+from django.urls import path
 
-from edms.users.api.views import UserViewSet
+API_PREFIX = "api/v1/"
 
-router = DefaultRouter() if settings.DEBUG else SimpleRouter()
-
-router.register("users", UserViewSet)
-
-
-app_name = "api"
-urlpatterns = router.urls
+urlpatterns = [
+    path(f"{API_PREFIX}", include("edms.users.api.urls")),
+    path(f"{API_PREFIX}", include("edms.organization.urls")),
+    path(f"{API_PREFIX}", include("edms.documents.urls")),
+]

@@ -33,14 +33,17 @@ services:
       - edms_local_postgres_data_backups:/backups
     env_file:
       - ./.envs/.local/.postgres
+    ports:
+      - '5432:5432'
 
   redis:
     image: docker.io/redis:6
     container_name: edms_local_redis
-    
+
     volumes:
       - edms_local_redis_data:/data
-    
+    ports:
+      - '6379:6379'
 
   celeryworker:
     <<: *django
