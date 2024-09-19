@@ -35,9 +35,13 @@ class DocumentReceiverSerializer(serializers.ModelSerializer):
 
 
 class DocumentSerializer(serializers.ModelSerializer):
-    receivers_ids = serializers.ListField(
+    # receivers_ids = serializers.ListField(
+    #     required=False,
+    #     child=serializers.IntegerField(),
+    #     write_only=True,
+    # )
+    receivers_ids = serializers.CharField(
         required=False,
-        child=serializers.IntegerField(),
         write_only=True,
     )
     receivers = UserSerializer(
@@ -88,7 +92,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     def validate(self, data):
         attachment_files = data.get("attachment_files", [])
         appendix_files = data.get("appendix_files", [])
-        receivers_pks = data.get("receivers_ids", [])
+        receivers_pks = list(map(int, data.get("receivers_ids", []).split(',')))
 
         user = self.context["request"].user
         if user.id in receivers_pks:
@@ -115,7 +119,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         attachment_files = validated_data.pop("attachment_files", [])
         appendix_files = validated_data.pop("appendix_files", [])
-        receivers_pks = validated_data.pop("receivers_ids", [])
+        receivers_pks = list(map(int, validated_data.pop("receivers_ids", []).split(',')))
 
         validated_data["document_code"] = uuid.uuid4()
 
