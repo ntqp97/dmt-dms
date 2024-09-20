@@ -1,5 +1,6 @@
 from django.db.models import Q
-from rest_framework import viewsets
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -9,6 +10,7 @@ from edms.common.app_status import ErrorResponse
 from edms.common.helper import custom_error
 from edms.common.pagination import StandardResultsSetPagination
 from edms.common.permissions import IsOwnerOrAdmin
+from edms.documents.filters import DocumentFilter
 from edms.documents.models import Document
 from edms.documents.serializers import DocumentSerializer
 
@@ -18,6 +20,23 @@ class DocumentViewSet(viewsets.ModelViewSet):
     queryset = Document.objects.all()
     pagination_class = StandardResultsSetPagination
     serializer_class = DocumentSerializer
+    filter_backends = (
+        filters.SearchFilter,
+        DjangoFilterBackend
+    )
+    filterset_class = DocumentFilter
+    search_fields = [
+        "document_code",
+        "document_title",
+        "document_summary",
+        "document_type",
+        "urgency_status",
+        "document_form",
+        "security_type",
+        "document_number_reference_code",
+        "sector",
+        "processing_status"
+    ]
 
     def get_permissions(self):
         if self.action in ["destroy", "update", "partial_update"]:
