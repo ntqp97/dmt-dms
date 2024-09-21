@@ -44,8 +44,11 @@ class DocumentSerializer(serializers.ModelSerializer):
         required=False,
         write_only=True,
     )
-    receivers = UserSerializer(
-        many=True,
+    # receivers = UserSerializer(
+    #     many=True,
+    #     read_only=True,
+    # )
+    sender = UserSerializer(
         read_only=True,
     )
     attachment_files = serializers.ListField(
@@ -67,8 +70,9 @@ class DocumentSerializer(serializers.ModelSerializer):
             "document_type",
             "urgency_status",
             "document_form",
-            "receivers",
+            # "receivers",
             "receivers_ids",
+            "sender",
             "security_type",
             "document_processing_deadline_at",
             "publish_type",
@@ -144,7 +148,11 @@ class DocumentSerializer(serializers.ModelSerializer):
         return document
 
     def to_representation(self, instance):
+        request = self.context.get('request', None)
         data = super().to_representation(instance)
+        if request:
+            sender = instance.document_receivers.filter(receiver_id=request.user.id).first()
+            data["sender"] = UserSerializer(sender.created_by).data
         attachment_files = AssetSerializer(
             Asset.objects.filter(
                 file_type=Asset.ATTACHMENT,
