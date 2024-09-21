@@ -51,6 +51,9 @@ class DocumentSerializer(serializers.ModelSerializer):
     sender = UserSerializer(
         read_only=True,
     )
+    arrival_at = serializers.IntegerField(
+        read_only=True,
+    )
     attachment_files = serializers.ListField(
         required=False,
         child=serializers.FileField(),
@@ -73,6 +76,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             # "receivers",
             "receivers_ids",
             "sender",
+            "arrival_at",
             "security_type",
             "document_processing_deadline_at",
             "publish_type",
@@ -153,9 +157,11 @@ class DocumentSerializer(serializers.ModelSerializer):
         if request:
             if instance.created_by.id == request.user.id:
                 data["sender"] = UserSerializer(request.user).data
+                data["arrival_at"] = int((float(instance.created_at.timestamp()))*1000)
             else:
                 document_receivers = instance.document_receivers.filter(receiver_id=request.user.id).first()
                 data["sender"] = UserSerializer(document_receivers.created_by).data
+                data["arrival_at"] = int((float(document_receivers.created_at.timestamp()))*1000)
         attachment_files = AssetSerializer(
             Asset.objects.filter(
                 file_type=Asset.ATTACHMENT,
