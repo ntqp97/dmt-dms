@@ -151,8 +151,11 @@ class DocumentSerializer(serializers.ModelSerializer):
         request = self.context.get('request', None)
         data = super().to_representation(instance)
         if request:
-            sender = instance.document_receivers.filter(receiver_id=request.user.id).first()
-            data["sender"] = UserSerializer(sender.created_by).data
+            if instance.created_by.id == request.user.id:
+                data["sender"] = UserSerializer(request.user).data
+            else:
+                document_receivers = instance.document_receivers.filter(receiver_id=request.user.id).first()
+                data["sender"] = UserSerializer(document_receivers.created_by).data
         attachment_files = AssetSerializer(
             Asset.objects.filter(
                 file_type=Asset.ATTACHMENT,
