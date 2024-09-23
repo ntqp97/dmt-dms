@@ -9,6 +9,7 @@ from edms.assets.models import Asset
 from edms.assets.serializers import AssetSerializer
 from edms.documents.models import Document
 from edms.documents.models import DocumentReceiver
+from edms.organization.models import OrganizationUnit
 from edms.users.api.serializers import UserSerializer
 from edms.users.models import User
 
@@ -31,23 +32,58 @@ class MarkAsReadSerializer(serializers.ModelSerializer):
 class DocumentReceiverSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentReceiver
-        fields = ["id", "receiver", "is_read", "read_at"]
+        fields = ["document", "id", "receiver", "is_read", "read_at"]
+
+
+class SendDocumentSerializer(serializers.Serializer):
+    recipient_type = serializers.ChoiceField(choices=[('user', 'User'), ('organization', 'Organization')])
+    recipient_id = serializers.IntegerField()
+
+    def validate(self, data):
+        document = self.context['document']
+        recipient_type = data.get('recipient_type')
+        recipient_id = data.get('recipient_id')
+
+        if recipient_type == 'user':
+            try:
+                user = User.objects.get(id=recipient_id)
+            except User.DoesNotExist:
+                raise serializers.ValidationError(
+                    {"detail": "User not found"}
+                )
+
+            if DocumentReceiver.objects.filter(document=document, receiver=user).exists():
+                raise serializers.ValidationError({"detail": "User has already received this document."})
+
+        elif recipient_type == 'organization':
+            if not OrganizationUnit.objects.filter(id=recipient_id).exists():
+                raise serializers.ValidationError(
+                    {"detail": "Organization not found"}
+                )
+            # try:
+            #     organization = OrganizationUnit.objects.get(id=recipient_id)
+            # except OrganizationUnit.DoesNotExist:
+            #     raise serializers.ValidationError(
+            #         {"detail": "Organization not found"}
+            #     )
+            # receivers_in_org = User.objects.filter(organization_unit=organization)
+            # for receiver in receivers_in_org:
+            #     if DocumentReceiver.objects.filter(document=document, receiver=receiver).exists():
+            #         raise serializers.ValidationError(
+            #             {"detail": f"User {receiver.name} in organization has already received this document."}
+            #         )
+        return data
 
 
 class DocumentSerializer(serializers.ModelSerializer):
-    # receivers_ids = serializers.ListField(
-    #     required=False,
-    #     child=serializers.IntegerField(),
-    #     write_only=True,
-    # )
     receivers_ids = serializers.CharField(
         required=False,
         write_only=True,
     )
-    # receivers = UserSerializer(
-    #     many=True,
-    #     read_only=True,
-    # )
+    receivers = UserSerializer(
+        many=True,
+        read_only=True,
+    )
     sender = UserSerializer(
         read_only=True,
     )
@@ -73,7 +109,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "document_type",
             "urgency_status",
             "document_form",
-            # "receivers",
+            "receivers",
             "receivers_ids",
             "sender",
             "arrival_at",
@@ -157,11 +193,11 @@ class DocumentSerializer(serializers.ModelSerializer):
         if request:
             if instance.created_by.id == request.user.id:
                 data["sender"] = UserSerializer(request.user).data
-                data["arrival_at"] = int((float(instance.created_at.timestamp()))*1000)
+                data["arrival_at"] = int((float(instance.created_at.timestamp())) * 1000)
             else:
                 document_receivers = instance.document_receivers.filter(receiver_id=request.user.id).first()
                 data["sender"] = UserSerializer(document_receivers.created_by).data
-                data["arrival_at"] = int((float(document_receivers.created_at.timestamp()))*1000)
+                data["arrival_at"] = int((float(document_receivers.created_at.timestamp())) * 1000)
         attachment_files = AssetSerializer(
             Asset.objects.filter(
                 file_type=Asset.ATTACHMENT,

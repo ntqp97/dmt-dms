@@ -1,7 +1,9 @@
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
+from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -12,7 +14,9 @@ from edms.common.pagination import StandardResultsSetPagination
 from edms.common.permissions import IsOwnerOrAdmin
 from edms.documents.filters import DocumentFilter
 from edms.documents.models import Document
-from edms.documents.serializers import DocumentSerializer
+from edms.documents.serializers import DocumentSerializer, SendDocumentSerializer
+from edms.organization.models import OrganizationUnit
+from edms.users.models import User
 
 
 # Create your views here.
@@ -52,7 +56,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
         else:
             queryset = Document.objects.filter(
                 Q(created_by=user) | Q(receivers=user),
-            )
+            ).distinct()
         return queryset.order_by("-id")
 
     def perform_create(self, serializer):
@@ -151,3 +155,50 @@ class DocumentViewSet(viewsets.ModelViewSet):
     #         serializer.save()
     #         return Response({"detail": "Document marked as read."}, status=status.HTTP_200_OK)
     #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        methods=["POST"],
+        detail=True,
+        permission_classes=[IsAuthenticated],
+        serializer_class=SendDocumentSerializer,
+        url_name='send-document',
+        url_path="send"
+    )
+    def send(self, request, pk=None):
+        try:
+            document = get_object_or_404(self.get_queryset(), id=pk)
+            serializer = SendDocumentSerializer(
+                data=request.data,
+                context={
+                    'document': document,
+                    'request': request,
+                }
+            )
+            if serializer.is_valid():
+                recipient_type = serializer.validated_data['recipient_type']
+                recipient_id = serializer.validated_data['recipient_id']
+                if recipient_type == 'user':
+                    receiver = User.objects.get(id=recipient_id)
+                    document.send_to_user(sender=request.user, receiver=receiver)
+                    return Response(
+                        {"message": f"Document sent to {receiver.name} successfully!"},
+                        status=AppResponse.SEND_DOCUMENTS.status_code
+                    )
+
+                elif recipient_type == 'organization':
+                    organization = OrganizationUnit.objects.get(id=recipient_id)
+                    document_receivers = document.send_to_organization(sender=request.user, organization=organization)
+                    return Response(
+                        {
+                            "message": f"Document sent to {len(document_receivers)} users in organization '{organization.name}' successfully!"
+                        },
+                        status=AppResponse.SEND_DOCUMENTS.status_code
+                    )
+            else:
+                return ErrorResponse(
+                    custom_error("DOCUMENT", serializer.errors),
+                ).failure_response()
+        except ValueError as e:
+            return ErrorResponse(
+                str(e),
+            ).failure_response()

@@ -41,6 +41,39 @@ class Document(BaseModel):
             ],
         )
 
+    def send_to_user(self, sender, receiver):
+        if receiver == self.created_by:
+            raise ValueError("Cannot send the document to the creator.")
+        if receiver == sender:
+            raise ValueError("Cannot send the document to yourself.")
+
+        return DocumentReceiver.objects.create(
+            document=self,
+            created_by=sender,
+            receiver=receiver
+        )
+
+    def send_to_organization(self, sender, organization):
+        from edms.users.models import User
+
+        receivers_in_org = User.objects.filter(organization_unit=organization)
+        document_receivers = []
+        for receiver in receivers_in_org:
+            if receiver == self.created_by:
+                continue
+            if receiver == sender:
+                continue
+            if not DocumentReceiver.objects.filter(document=self, receiver=receiver).exists():
+                document_receivers.append(
+                    DocumentReceiver(
+                        document=self,
+                        created_by=sender,
+                        receiver=receiver
+                    )
+                )
+
+        return document_receivers if not document_receivers else DocumentReceiver.objects.bulk_create(document_receivers)
+
 
 class DocumentReceiver(BaseModel):
     document = models.ForeignKey(

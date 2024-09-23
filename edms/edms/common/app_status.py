@@ -18,6 +18,8 @@ class AppResponse(Enum):
     UPDATE_DOCUMENTS = status.HTTP_200_OK, "DOCUMENTS__UPDATE__SUCCESS"
     DELETE_DOCUMENTS = status.HTTP_200_OK, "DOCUMENTS__DELETE__SUCCESS"
     STATISTICS_DOCUMENTS = status.HTTP_200_OK, "DOCUMENTS__STATISTICS__SUCCESS"
+    SEND_DOCUMENTS = status.HTTP_200_OK, "DOCUMENTS__SEND__SUCCESS"
+    SEND_DOCUMENTS_FAILURE = status.HTTP_400_BAD_REQUEST, "DOCUMENTS__SEND__FAILURE"
     # DELETE_DOCUMENTS_FAILURE = status.HTTP_400_BAD_REQUEST, 'DOCUMENTS__DELETE__FAILURE'
 
     @property
@@ -34,7 +36,7 @@ class AppResponse(Enum):
 
     @property
     def failure_response(self):
-        return dict(errors=self.value[1])
+        return dict(detail=self.value[1])
 
 
 class ErrorResponse:
