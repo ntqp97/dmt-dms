@@ -1,4 +1,4 @@
-# EDMS
+# EDMS CHECK
 
 A Electronic Document Management System
 
