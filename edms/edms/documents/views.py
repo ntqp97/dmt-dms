@@ -176,18 +176,18 @@ class DocumentViewSet(viewsets.ModelViewSet):
             )
             if serializer.is_valid():
                 recipient_type = serializer.validated_data['recipient_type']
-                recipient_id = serializer.validated_data['recipient_id']
+                recipient_ids = list(map(int, serializer.validated_data.get("recipient_id", []).split(',')))
                 if recipient_type == 'user':
-                    receiver = User.objects.get(id=recipient_id)
-                    document.send_to_user(sender=request.user, receiver=receiver)
+                    receivers = User.objects.filter(id__in=recipient_ids)
+                    document.send_to_users(sender=request.user, receiver=receivers)
                     return Response(
-                        {"message": f"Document sent to {receiver.name} successfully!"},
+                        {"message": f"Document sent successfully!"},
                         status=AppResponse.SEND_DOCUMENTS.status_code
                     )
 
                 elif recipient_type == 'organization':
-                    organization = OrganizationUnit.objects.get(id=recipient_id)
-                    document_receivers = document.send_to_organization(sender=request.user, organization=organization)
+                    organizations = OrganizationUnit.objects.get(id=recipient_ids)
+                    document_receivers = document.send_to_organizations(sender=request.user, organizations=organizations)
                     return Response(
                         {
                             "message": f"Document sent to {len(document_receivers)} users in organization '{organization.name}' successfully!"

@@ -37,41 +37,44 @@ class DocumentReceiverSerializer(serializers.ModelSerializer):
 
 class SendDocumentSerializer(serializers.Serializer):
     recipient_type = serializers.ChoiceField(choices=[('user', 'User'), ('organization', 'Organization')])
-    recipient_id = serializers.IntegerField()
+    recipient_id = serializers.CharField()
 
     def validate(self, data):
         document = self.context['document']
+        request = self.context['request']
         recipient_type = data.get('recipient_type')
-        recipient_id = data.get('recipient_id')
+        recipient_ids = list(map(int, data.get("recipient_id", []).split(',')))
 
         if recipient_type == 'user':
-            try:
-                user = User.objects.get(id=recipient_id)
-            except User.DoesNotExist:
+            if request.user.id in recipient_ids:
                 raise serializers.ValidationError(
-                    {"detail": "User not found"}
+                    {"detail": "You cannot include yourself as a receiver."},
                 )
+            invalid_users = User.objects.filter(id__in=recipient_ids).values_list('id', flat=True)
+            missing_users = set(recipient_ids) - set(invalid_users)
+            if missing_users:
+                raise serializers.ValidationError(
+                    {"detail": f"User(s) with id(s) {', '.join(map(str, missing_users))} not found."}
+                )
+            already_received = DocumentReceiver.objects.filter(
+                document=document,
+                receiver__id__in=recipient_ids
+            ).values_list('receiver__id', flat=True)
 
-            if DocumentReceiver.objects.filter(document=document, receiver=user).exists():
-                raise serializers.ValidationError({"detail": "User has already received this document."})
+            if already_received:
+                raise serializers.ValidationError(
+                    {"detail": f"User(s) with id(s) {', '.join(map(str, already_received))} has/have already received this document."}
+                )
 
         elif recipient_type == 'organization':
-            if not OrganizationUnit.objects.filter(id=recipient_id).exists():
+            invalid_organizationunits = OrganizationUnit.objects.filter(
+                id__in=recipient_ids
+            ).values_list('id', flat=True)
+            missing_organizationunits = set(recipient_ids) - set(invalid_organizationunits)
+            if missing_organizationunits:
                 raise serializers.ValidationError(
-                    {"detail": "Organization not found"}
+                    {"detail": f"Organization(s) with id(s) {', '.join(map(str, missing_organizationunits))} not found."}
                 )
-            # try:
-            #     organization = OrganizationUnit.objects.get(id=recipient_id)
-            # except OrganizationUnit.DoesNotExist:
-            #     raise serializers.ValidationError(
-            #         {"detail": "Organization not found"}
-            #     )
-            # receivers_in_org = User.objects.filter(organization_unit=organization)
-            # for receiver in receivers_in_org:
-            #     if DocumentReceiver.objects.filter(document=document, receiver=receiver).exists():
-            #         raise serializers.ValidationError(
-            #             {"detail": f"User {receiver.name} in organization has already received this document."}
-            #         )
         return data
 
 
