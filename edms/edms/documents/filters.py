@@ -11,6 +11,8 @@ class DocumentFilter(django_filters.FilterSet):
     publish_type = django_filters.CharFilter(lookup_expr='exact')
     sector = django_filters.CharFilter(lookup_expr='exact')
     processing_status = django_filters.CharFilter(lookup_expr='exact')
+    document_number_reference_code = django_filters.CharFilter(lookup_expr='icontains')
+    document_category = django_filters.CharFilter(lookup_expr='exact')
 
     # document_processing_deadline_at = django_filters.NumberFilter(field_name='document_processing_deadline_at')  # Lọc theo deadline
     # receivers = django_filters.ModelMultipleChoiceFilter(

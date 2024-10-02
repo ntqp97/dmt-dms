@@ -7,7 +7,7 @@ from rest_framework import serializers
 
 from edms.assets.models import Asset
 from edms.assets.serializers import AssetSerializer
-from edms.documents.models import Document
+from edms.documents.models import Document, DocumentSignature
 from edms.documents.models import DocumentReceiver
 from edms.organization.models import OrganizationUnit
 from edms.users.api.serializers import UserSerializer
@@ -33,6 +33,18 @@ class DocumentReceiverSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentReceiver
         fields = ["document", "id", "receiver", "is_read", "read_at"]
+
+
+class DocumentSignatureSerializer(serializers.ModelSerializer):
+    # signer_id = serializers.CharField(
+    #     required=False,
+    #     write_only=True,
+    # )
+
+    class Meta:
+        model = DocumentSignature
+        fields = ["document", "signer", "is_signature_visible", "signature_status", "order"]
+        read_only_fields = ["signature_status", "document"]
 
 
 class SendDocumentSerializer(serializers.Serializer):
@@ -83,6 +95,10 @@ class DocumentSerializer(serializers.ModelSerializer):
         required=False,
         write_only=True,
     )
+    signers = DocumentSignatureSerializer(
+        required=False,
+        many=True
+    )
     receivers = UserSerializer(
         many=True,
         read_only=True,
@@ -101,6 +117,10 @@ class DocumentSerializer(serializers.ModelSerializer):
         required=False,
         child=serializers.FileField(),
     )
+    signature_files = serializers.ListField(
+        required=False,
+        child=serializers.FileField(),
+    )
 
     class Meta:
         model = Document
@@ -112,6 +132,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "document_type",
             "urgency_status",
             "document_form",
+            "signers",
             "receivers",
             "receivers_ids",
             "sender",
@@ -124,11 +145,11 @@ class DocumentSerializer(serializers.ModelSerializer):
             "processing_status",
             "attachment_files",
             "appendix_files",
+            "signature_files",
         ]
         read_only_fields = ["document_code"]
 
-    def validate_file_type(self, file):
-        allowed_extensions = ["pdf", "doc", "docx", "jpeg"]
+    def validate_file_type(self, file, allowed_extensions):
         _, file_extension = os.path.splitext(file.name)
         if file_extension.replace(".", "") not in allowed_extensions:
             raise serializers.ValidationError(
@@ -139,54 +160,76 @@ class DocumentSerializer(serializers.ModelSerializer):
     def validate(self, data):
         attachment_files = data.get("attachment_files", [])
         appendix_files = data.get("appendix_files", [])
-        receivers_pks = list(map(int, data.get("receivers_ids", []).split(',')))
+        signature_files = data.get("signature_files", [])
+        receivers_ids = data.get("receivers_ids")
+        receivers_pks = list(map(int, receivers_ids.split(','))) if receivers_ids else []
 
         user = self.context["request"].user
         if user.id in receivers_pks:
             raise serializers.ValidationError(
-                {"receivers": "You cannot include yourself as a receiver."},
+                {"detail": "You cannot include yourself as a receiver."},
             )
 
-        if not attachment_files and not appendix_files:
+        if len(signature_files) > 1:
+            raise serializers.ValidationError(
+                {"detail": "You can only include one signature file."},
+            )
+
+        if not attachment_files and not appendix_files and not signature_files:
             raise serializers.ValidationError(
                 {
-                    "detail": "At least one of the fields 'attachment_files' or 'appendix_files' must be provided.",
+                    "detail": "At least one of the fields 'files' must be provided.",
                 },
             )
 
         # Validate file types
         for file in attachment_files:
-            self.validate_file_type(file)
+            allowed_extensions = ["pdf", "doc", "docx"]
+            self.validate_file_type(file, allowed_extensions)
 
         for file in appendix_files:
-            self.validate_file_type(file)
+            allowed_extensions = ["pdf", "doc", "docx"]
+            self.validate_file_type(file, allowed_extensions)
+
+        for file in signature_files:
+            allowed_extensions = ["pdf"]
+            self.validate_file_type(file, allowed_extensions)
 
         return data
 
     def create(self, validated_data):
         attachment_files = validated_data.pop("attachment_files", [])
         appendix_files = validated_data.pop("appendix_files", [])
-        receivers_pks = list(map(int, validated_data.pop("receivers_ids", []).split(',')))
+        signature_files = validated_data.pop("signature_files", [])
+        receivers_ids = validated_data.get("receivers_ids")
+        receivers_pks = list(map(int, receivers_ids.split(','))) if receivers_ids else []
+        signers = validated_data.pop("signers", [])
 
         validated_data["document_code"] = uuid.uuid4()
+        validated_data["document_category"] = (
+            Document.SIGNING_DOCUMENT
+            if signature_files
+            else Document.NORMAL_DOCUMENT
+        )
 
         document = Document.objects.create(**validated_data)
 
-        receivers = User.objects.filter(pk__in=receivers_pks)
-        missing_receivers = set(receivers_pks) - set(
-            receivers.values_list("pk", flat=True),
-        )
-        if missing_receivers:
-            raise serializers.ValidationError(
-                {"detail": f"Users with Pks {missing_receivers} do not exist."},
+        if not signature_files:
+            receivers = User.objects.filter(pk__in=receivers_pks)
+            missing_receivers = set(receivers_pks) - set(
+                receivers.values_list("pk", flat=True),
             )
-        document.receivers.add(*receivers)
-        DocumentReceiver.objects.filter(
-            document=document,
-            receiver__in=receivers,
-        ).update(created_by=document.created_by)
+            if missing_receivers:
+                raise serializers.ValidationError(
+                    {"detail": f"Users with Pks {missing_receivers} do not exist."},
+                )
+            document.associate_receivers(receivers)
+        else:
+            document.create_document_signature_flow(signers)
+
         document.associate_assets(attachment_files, Asset.ATTACHMENT)
         document.associate_assets(appendix_files, Asset.APPENDIX)
+        document.associate_assets(signature_files, Asset.SIGNATURE_FILE)
 
         return document
 

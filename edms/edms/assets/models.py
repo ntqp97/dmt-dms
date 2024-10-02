@@ -17,7 +17,8 @@ def get_path_files(instance, filename):
 class Asset(BaseModel):
     ATTACHMENT = "attachment"
     APPENDIX = "appendix"
-    FILE_TYPE_CHOICES = [(ATTACHMENT, ATTACHMENT), (APPENDIX, APPENDIX)]
+    SIGNATURE_FILE = "signature_file"
+    FILE_TYPE_CHOICES = [(ATTACHMENT, ATTACHMENT), (APPENDIX, APPENDIX), (SIGNATURE_FILE, SIGNATURE_FILE)]
 
     document = models.ForeignKey(
         "documents.Document",
