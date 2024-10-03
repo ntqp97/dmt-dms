@@ -42,6 +42,12 @@ class Document(BaseModel):
         default=NORMAL_DOCUMENT,
     )
     files = models.ManyToManyField("assets.Asset", related_name="document_assets")
+    attachment_documents = models.ManyToManyField(
+        "self",
+        blank=True,
+        related_name="attached_documents",
+        symmetrical=False
+    )
 
     def associate_assets(self, files, file_type):
         Asset.objects.bulk_create(
@@ -114,7 +120,8 @@ class Document(BaseModel):
                 DocumentSignature(
                     document=self,
                     created_by=self.created_by,
-                    signer=User.objects.get(id=signer['signer']),
+                    is_signature_visible=signer['is_signature_visible'],
+                    signer=User.objects.get(id=signer['signer_id']),
                     order=signer['order']
                 )
                 for signer in signers

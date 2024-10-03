@@ -1,5 +1,8 @@
+import json
+
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.http import QueryDict
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
@@ -55,7 +58,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
             queryset = Document.objects.all()
         else:
             queryset = Document.objects.filter(
-                Q(created_by=user) | Q(receivers=user),
+                Q(created_by=user) | Q(receivers__in=[user]) | Q(signers__in=[user]),
             ).distinct()
         return queryset.order_by("-id")
 
@@ -65,8 +68,25 @@ class DocumentViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
 
+    def process_signers(self, signers):
+        signers_list = []
+        if signers:
+            signers_list = (
+                json.loads(signers)
+                if isinstance(signers, str)
+                else signers
+            )
+        return signers_list
+
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        signers_list = self.process_signers(request.data.get("signers_flow"))
+        serializer = self.get_serializer(
+            data=request.data,
+            context={
+                'request': request,
+                'signers_flow': signers_list
+            }
+        )
         if serializer.is_valid():
             self.perform_create(serializer)
             data = AppResponse.CREATE_DOCUMENTS.success_response

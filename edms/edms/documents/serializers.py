@@ -36,14 +36,17 @@ class DocumentReceiverSerializer(serializers.ModelSerializer):
 
 
 class DocumentSignatureSerializer(serializers.ModelSerializer):
-    # signer_id = serializers.CharField(
-    #     required=False,
-    #     write_only=True,
-    # )
+    signer_id = serializers.IntegerField(
+        required=True,
+        write_only=True
+    )
+    is_signature_visible = serializers.BooleanField(required=True)
+    order = serializers.IntegerField(required=True)
+    signer = UserSerializer(read_only=True)
 
     class Meta:
         model = DocumentSignature
-        fields = ["document", "signer", "is_signature_visible", "signature_status", "order"]
+        fields = ["document", "signer_id", "signer", "is_signature_visible", "signature_status", "order"]
         read_only_fields = ["signature_status", "document"]
 
 
@@ -90,14 +93,34 @@ class SendDocumentSerializer(serializers.Serializer):
         return data
 
 
+class BaseDocumentSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Document
+        fields = [
+            "id", "document_code", "document_title", "document_summary",
+            "document_type", "urgency_status", "document_form",
+            "security_type", "publish_type", "document_number_reference_code",
+            "sector", "processing_status", "document_category"
+        ]
+
+
 class DocumentSerializer(serializers.ModelSerializer):
+    attachment_document_ids = serializers.CharField(
+        required=False,
+        write_only=True,
+    )
+    attachment_documents = BaseDocumentSerializer(
+        many=True,
+        read_only=True,
+    )
     receivers_ids = serializers.CharField(
         required=False,
         write_only=True,
     )
-    signers = DocumentSignatureSerializer(
+    signers_flow = DocumentSignatureSerializer(
         required=False,
-        many=True
+        many=True,
     )
     receivers = UserSerializer(
         many=True,
@@ -132,7 +155,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "document_type",
             "urgency_status",
             "document_form",
-            "signers",
+            "signers_flow",
             "receivers",
             "receivers_ids",
             "sender",
@@ -146,6 +169,9 @@ class DocumentSerializer(serializers.ModelSerializer):
             "attachment_files",
             "appendix_files",
             "signature_files",
+            "attachment_document_ids",
+            "attachment_documents",
+            "document_category",
         ]
         read_only_fields = ["document_code"]
 
@@ -163,17 +189,31 @@ class DocumentSerializer(serializers.ModelSerializer):
         signature_files = data.get("signature_files", [])
         receivers_ids = data.get("receivers_ids")
         receivers_pks = list(map(int, receivers_ids.split(','))) if receivers_ids else []
-
         user = self.context["request"].user
         if user.id in receivers_pks:
             raise serializers.ValidationError(
                 {"detail": "You cannot include yourself as a receiver."},
             )
 
-        if len(signature_files) > 1:
-            raise serializers.ValidationError(
-                {"detail": "You can only include one signature file."},
-            )
+        if signature_files:
+            attachment_document_ids = data.get("attachment_document_ids")
+            attachment_document_ids = list(map(int, attachment_document_ids.split(','))) if attachment_document_ids else []
+            signers_data = data.get("signers_flow", self.context.get("signers_flow", []))
+            serializer = DocumentSignatureSerializer(data=signers_data, many=True)
+            if serializer.is_valid():
+                data['signers_flow'] = signers_data
+            else:
+                raise serializers.ValidationError(
+                    {"detail": f"{serializer.errors}."},
+                )
+            if len(signature_files) > 1:
+                raise serializers.ValidationError(
+                    {"detail": "You can only include one signature file."},
+                )
+            if not signers_data:
+                raise serializers.ValidationError(
+                    {"detail": "Signers are required when including a signature file."},
+                )
 
         if not attachment_files and not appendix_files and not signature_files:
             raise serializers.ValidationError(
@@ -201,9 +241,11 @@ class DocumentSerializer(serializers.ModelSerializer):
         attachment_files = validated_data.pop("attachment_files", [])
         appendix_files = validated_data.pop("appendix_files", [])
         signature_files = validated_data.pop("signature_files", [])
-        receivers_ids = validated_data.get("receivers_ids")
+        receivers_ids = validated_data.pop("receivers_ids")
         receivers_pks = list(map(int, receivers_ids.split(','))) if receivers_ids else []
-        signers = validated_data.pop("signers", [])
+        signers_flow = validated_data.pop("signers_flow", [])
+        attachment_document_ids = validated_data.pop("attachment_document_ids")
+        attachment_document_ids = list(map(int, attachment_document_ids.split(','))) if attachment_document_ids else []
 
         validated_data["document_code"] = uuid.uuid4()
         validated_data["document_category"] = (
@@ -225,7 +267,9 @@ class DocumentSerializer(serializers.ModelSerializer):
                 )
             document.associate_receivers(receivers)
         else:
-            document.create_document_signature_flow(signers)
+            attachment_document = Document.objects.filter(pk__in=attachment_document_ids)
+            document.attachment_documents.add(*attachment_document)
+            document.create_document_signature_flow(signers=signers_flow)
 
         document.associate_assets(attachment_files, Asset.ATTACHMENT)
         document.associate_assets(appendix_files, Asset.APPENDIX)
@@ -236,6 +280,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         request = self.context.get('request', None)
         data = super().to_representation(instance)
+        data['signers_flow'] = DocumentSignatureSerializer(instance.signatures.all(), many=True).data
         if request:
             if instance.created_by.id == request.user.id:
                 data["sender"] = UserSerializer(request.user).data
@@ -258,7 +303,15 @@ class DocumentSerializer(serializers.ModelSerializer):
             ),
             many=True,
         ).data
+        signature_files = AssetSerializer(
+            Asset.objects.filter(
+                file_type=Asset.SIGNATURE_FILE,
+                document_id=instance.id,
+            ),
+            many=True,
+        ).data
 
         data["attachment_files"] = attachment_files
         data["appendix_files"] = appendix_files
+        data["signature_files"] = signature_files
         return data

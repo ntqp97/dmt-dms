@@ -1,7 +1,7 @@
 from typing import ClassVar
 
 from django.contrib.auth.models import AbstractUser
-from django.db.models import SET_NULL
+from django.db.models import SET_NULL, ManyToManyField
 from django.db.models import BooleanField
 from django.db.models import CharField
 from django.db.models import DateTimeField
@@ -39,6 +39,8 @@ class User(AbstractUser):
     position = CharField(max_length=255, null=True, blank=True)
     gender = BooleanField(default=True)
     email_checked = BooleanField(default=False)
+    external_user_id = CharField(max_length=255, null=True, blank=True)
+    signature_images = ManyToManyField("assets.Asset", related_name="signature_assets")
 
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)
