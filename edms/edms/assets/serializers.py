@@ -8,8 +8,8 @@ class AssetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Asset
-        fields = ["id", "size", "mime_type", "asset_name", "file_type", "preview_file_url"]
-        read_only_fields = ["id", "size", "mime_type", "asset_name", "preview_file_url"]
+        fields = ["id", "size", "mime_type", "asset_name", "file_type", "preview_file_url", "file"]
+        read_only_fields = ["id", "size", "mime_type", "asset_name", "preview_file_url", "file"]
 
     def get_preview_file_url(self, obj):
         request = self.context.get('request')
