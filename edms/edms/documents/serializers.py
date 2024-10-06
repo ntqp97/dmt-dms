@@ -241,10 +241,10 @@ class DocumentSerializer(serializers.ModelSerializer):
         attachment_files = validated_data.pop("attachment_files", [])
         appendix_files = validated_data.pop("appendix_files", [])
         signature_files = validated_data.pop("signature_files", [])
-        receivers_ids = validated_data.pop("receivers_ids")
+        receivers_ids = validated_data.pop("receivers_ids", [])
         receivers_pks = list(map(int, receivers_ids.split(','))) if receivers_ids else []
         signers_flow = validated_data.pop("signers_flow", [])
-        attachment_document_ids = validated_data.pop("attachment_document_ids")
+        attachment_document_ids = validated_data.pop("attachment_document_ids", [])
         attachment_document_ids = list(map(int, attachment_document_ids.split(','))) if attachment_document_ids else []
 
         validated_data["document_code"] = uuid.uuid4()
@@ -295,6 +295,7 @@ class DocumentSerializer(serializers.ModelSerializer):
                 document_id=instance.id,
             ),
             many=True,
+            context={'request': request}
         ).data
         appendix_files = AssetSerializer(
             Asset.objects.filter(
@@ -302,6 +303,7 @@ class DocumentSerializer(serializers.ModelSerializer):
                 document_id=instance.id,
             ),
             many=True,
+            context={'request': request}
         ).data
         signature_files = AssetSerializer(
             Asset.objects.filter(
@@ -309,6 +311,7 @@ class DocumentSerializer(serializers.ModelSerializer):
                 document_id=instance.id,
             ),
             many=True,
+            context={'request': request}
         ).data
 
         data["attachment_files"] = attachment_files

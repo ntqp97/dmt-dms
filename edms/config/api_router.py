@@ -7,4 +7,5 @@ urlpatterns = [
     path(f"{API_PREFIX}", include("edms.users.api.urls")),
     path(f"{API_PREFIX}", include("edms.organization.urls")),
     path(f"{API_PREFIX}", include("edms.documents.urls")),
+    path(f"{API_PREFIX}", include("edms.assets.urls")),
 ]

@@ -4,14 +4,17 @@ from edms.assets.models import Asset
 
 
 class AssetSerializer(serializers.ModelSerializer):
+    preview_file_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Asset
-        fields = ["id", "file", "size", "mime_type", "asset_name", "file_type"]
-        read_only_fields = ["id", "size", "mime_type", "asset_name"]
+        fields = ["id", "size", "mime_type", "asset_name", "file_type", "preview_file_url"]
+        read_only_fields = ["id", "size", "mime_type", "asset_name", "preview_file_url"]
 
-    # def create(self, validated_data):
-    #     file_instance = validated_data.get('file')
-    #     validated_data['size'] = file_instance.size
-    #     validated_data['name'] = file_instance.name
-    #     validated_data['mime_type'] = mimetypes.guess_type(file_instance.name)[0]
-    #     return super().create(validated_data)
+    def get_preview_file_url(self, obj):
+        request = self.context.get('request')
+        host = request.get_host()
+        scheme = 'https' if request.is_secure() else 'http'
+        if obj.file and obj.mime_type == "application/pdf":
+            return f"{scheme}://{host}/api/v1/assets/{obj.id}/preview-pdf/"
+        return obj.file
