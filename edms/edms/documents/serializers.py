@@ -286,9 +286,14 @@ class DocumentSerializer(serializers.ModelSerializer):
                 data["sender"] = UserSerializer(request.user).data
                 data["arrival_at"] = int((float(instance.created_at.timestamp())) * 1000)
             else:
-                document_receivers = instance.document_receivers.filter(receiver_id=request.user.id).first()
-                data["sender"] = UserSerializer(document_receivers.created_by).data
-                data["arrival_at"] = int((float(document_receivers.created_at.timestamp())) * 1000)
+                document_signer_or_receiver = (
+                    instance.signatures.filter(signer_id=request.user.id).first() or
+                    instance.document_receivers.filter(receiver_id=request.user.id).first()
+                )
+
+                if document_signer_or_receiver:
+                    data["sender"] = UserSerializer(document_signer_or_receiver.created_by).data
+                    data["arrival_at"] = int((float(document_signer_or_receiver.created_at.timestamp())) * 1000)
         attachment_files = AssetSerializer(
             Asset.objects.filter(
                 file_type=Asset.ATTACHMENT,
