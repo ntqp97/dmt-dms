@@ -54,12 +54,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self, *args, **kwargs):
         user = self.request.user
-        if user.is_staff or user.is_superuser:
-            queryset = Document.objects.all()
-        else:
-            queryset = Document.objects.filter(
-                Q(created_by=user) | Q(receivers__in=[user]) | Q(signers__in=[user]),
-            ).distinct()
+        # if user.is_staff or user.is_superuser:
+        #     queryset = Document.objects.all()
+        # else:
+        queryset = Document.objects.filter(
+            Q(created_by=user) | Q(receivers__in=[user]) | Q(signers__in=[user]),
+        ).distinct()
         return queryset.order_by("-id")
 
     def perform_create(self, serializer):
