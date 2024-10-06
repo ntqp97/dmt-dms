@@ -50,6 +50,7 @@ class Document(BaseModel):
     )
 
     def associate_assets(self, files, file_type):
+        import mimetypes
         Asset.objects.bulk_create(
             [
                 Asset(
@@ -58,7 +59,11 @@ class Document(BaseModel):
                     file=file,
                     size=file.size,
                     asset_name=file.name,
-                    mime_type=file.content_type,
+                    mime_type=(
+                        mimetypes.guess_type(file.name)[0]
+                        if mimetypes.guess_type(file.name)[0]
+                        else file.content_type
+                    ),
                     created_by=self.created_by,
                 )
                 for file in files
