@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import QueryDict
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
@@ -20,6 +20,7 @@ from edms.documents.models import Document
 from edms.documents.serializers import DocumentSerializer, SendDocumentSerializer
 from edms.organization.models import OrganizationUnit
 from edms.users.models import User
+from django.conf import settings
 
 
 # Create your views here.
@@ -218,6 +219,60 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 return ErrorResponse(
                     custom_error("DOCUMENT", serializer.errors),
                 ).failure_response()
+        except ValueError as e:
+            return ErrorResponse(
+                str(e),
+            ).failure_response()
+
+    @action(
+        methods=["POST"],
+        detail=True,
+        permission_classes=[IsAuthenticated],
+        serializer_class=None,
+        url_name='start-signing-document',
+        url_path="start-sign"
+    )
+    def start_signing_document(self, request, pk=None):
+        try:
+            document = get_object_or_404(self.get_queryset(), id=pk)
+            document.start_sign(request=request)
+            return Response(
+                data=AppResponse.START_SIGNING_DOCUMENTS.success_response,
+                status=AppResponse.START_SIGNING_DOCUMENTS.status_code
+            )
+        except ValueError as e:
+            return ErrorResponse(
+                str(e),
+            ).failure_response()
+
+    @action(
+        methods=["POST"],
+        detail=True,
+        permission_classes=[IsAuthenticated],
+        serializer_class=None,
+        url_name='signing-document',
+        url_path="sign"
+    )
+    def signing_document(self, request, pk=None):
+        try:
+            document = get_object_or_404(self.get_queryset(), id=pk)
+            sign_hash_response = document.sign(
+                request=request,
+                client_id=settings.MS_CLIENT_ID,
+                client_secret=settings.MS_CLIENT_SECRET,
+                base_url=settings.MS_BASE_URL,
+                profile_id=settings.MS_PROFILE_ID,
+                access_key=settings.AWS_ACCESS_KEY_ID,
+                secret_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_S3_REGION_NAME,
+                bucket_name=settings.AWS_STORAGE_BUCKET_NAME,
+            )
+            data = AppResponse.START_SIGNING_DOCUMENTS.success_response
+            data["transaction_id"] = sign_hash_response.get("transactionId")
+            return Response(
+                data=data,
+                status=AppResponse.START_SIGNING_DOCUMENTS.status_code
+            )
         except ValueError as e:
             return ErrorResponse(
                 str(e),

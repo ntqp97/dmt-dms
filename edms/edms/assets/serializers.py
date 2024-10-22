@@ -8,8 +8,8 @@ class AssetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Asset
-        fields = ["id", "size", "mime_type", "asset_name", "file_type", "preview_file_url", "file"]
-        read_only_fields = ["id", "size", "mime_type", "asset_name", "preview_file_url", "file"]
+        fields = ["id", "size", "mime_type", "asset_name", "file_type", "preview_file_url"]
+        read_only_fields = ["id", "size", "mime_type", "asset_name", "preview_file_url"]
 
     def get_preview_file_url(self, obj):
         request = self.context.get('request')
@@ -17,4 +17,4 @@ class AssetSerializer(serializers.ModelSerializer):
         scheme = 'https' if request.is_secure() else 'http'
         if obj.file and obj.mime_type == "application/pdf":
             return f"{scheme}://{host}/api/v1/assets/{obj.id}/preview-pdf/"
-        return obj.file
+        return obj.file.url

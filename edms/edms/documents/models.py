@@ -1,7 +1,8 @@
-from django.db import models
+from django.db import models, transaction
 
 from edms.assets.models import Asset
 from edms.common.basemodels import BaseModel
+from edms.documents.signing_utils import MySignHelper
 from edms.users.models import User
 
 
@@ -9,7 +10,14 @@ from edms.users.models import User
 class Document(BaseModel):
     SIGNING_DOCUMENT = "signing_document"
     NORMAL_DOCUMENT = "normal_document"
-    DOCUMENT_CATEGORY_CHOICES = [(SIGNING_DOCUMENT, SIGNING_DOCUMENT), (NORMAL_DOCUMENT, NORMAL_DOCUMENT)]
+    IN_PROGRESS_SIGNING_DOCUMENT = "in_progress_signing_document"
+    COMPLETED_SIGNING_DOCUMENT = "completed_signing_document"
+    DOCUMENT_CATEGORY_CHOICES = [
+        (SIGNING_DOCUMENT, SIGNING_DOCUMENT),
+        (NORMAL_DOCUMENT, NORMAL_DOCUMENT),
+        (IN_PROGRESS_SIGNING_DOCUMENT, IN_PROGRESS_SIGNING_DOCUMENT),
+        (COMPLETED_SIGNING_DOCUMENT, COMPLETED_SIGNING_DOCUMENT),
+    ]
 
     document_code = models.CharField(max_length=50, unique=True)
     document_title = models.CharField(max_length=255)
@@ -48,6 +56,13 @@ class Document(BaseModel):
         related_name="attached_documents",
         symmetrical=False
     )
+
+    def update_fields(self, **kwargs):
+        for field, value in kwargs.items():
+            if hasattr(self, field):
+                setattr(self, field, value)
+
+        self.save()
 
     def associate_assets(self, files, file_type):
         import mimetypes
@@ -133,6 +148,97 @@ class Document(BaseModel):
             ]
         )
 
+    def start_sign(self, request):
+        try:
+            # TODO Validate signature stream
+            if self.document_category != Document.SIGNING_DOCUMENT:
+                raise ValueError("The document cannot be signed because it is not categorized as a signing document.")
+            self.update_fields(
+                document_category=Document.IN_PROGRESS_SIGNING_DOCUMENT,
+                updated_by=request.user,
+            )
+            # TODO Noti to signer
+        except Exception as e:
+            raise ValueError(f"Failed to update document state: {e}")
+
+    def sign(self, request, client_id, client_secret, base_url, profile_id, access_key, secret_key, region_name, bucket_name):
+        if self.document_category != Document.IN_PROGRESS_SIGNING_DOCUMENT:
+            raise ValueError(
+                "The document cannot be signed because it is not categorized as a in progress signing document."
+            )
+        document_signature = self.signatures.filter(signer=request.user).first()
+
+        if document_signature in [DocumentSignature.SIGNED, DocumentSignature.PENDING]:
+            raise ValueError("You have SIGNED/PENDING the signing.")
+
+        previous_signatures = self.signatures.filter(
+            order__lt=document_signature.order
+        ).exclude(
+            signature_status=DocumentSignature.SIGNED
+        )
+
+        if previous_signatures:
+            raise ValueError(
+                "The signing process cannot proceed because a previous signer has not completed their signature"
+            )
+
+        signature_file = Asset.objects.filter(
+            file_type=Asset.SIGNATURE_FILE,
+            document_id=self.id,
+        ).first()
+        if document_signature and signature_file:
+            cert_list, access_token = MySignHelper.get_all_certificates(
+                user_id=document_signature.signer.external_user_id,
+                base_url=base_url,
+                client_id=client_id,
+                client_secret=client_secret,
+                profile_id=profile_id
+            )
+
+            if cert_list:
+                signature_file_bytes = signature_file.get_asset_file(
+                    access_key=access_key,
+                    secret_key=secret_key,
+                    region_name=region_name,
+                    bucket_name=bucket_name
+                ).read()
+
+                # coordinates_dict = pdf_helper.get_signature_field_coordinates(
+                #     pages=None,
+                #     input_pdf=signature_file_bytes
+                # )
+                # num_signatures = len(coordinates_dict.get(document_signature.order, []))
+
+                hash_list = [MySignHelper.generate_base64_sha256(signature_file_bytes)]
+
+                sign_hash_response = MySignHelper.sign_hash(
+                    hash_list=hash_list,
+                    document_id=self.document_code,
+                    document_name=MySignHelper.convert_string2base64(self.document_title),
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    credential_id=list(cert_list.keys())[0],
+                    base_url=base_url,
+                    access_token=access_token
+                )
+
+                if not sign_hash_response:
+                    raise ValueError("Failed to sign the document.")
+
+                try:
+                    document_signature.update_fields(
+                        transaction_id=sign_hash_response.get("transactionId"),
+                        signature_status=DocumentSignature.PENDING,
+                        updated_by=request.user,
+                    )
+                except Exception as e:
+                    raise ValueError(f"Failed to update document state: {e}")
+                return sign_hash_response
+            else:
+                raise ValueError("No certificates found for the signer.")
+        else:
+            raise ValueError("No unsigned signer or signature files available.")
+
 
 class DocumentReceiver(BaseModel):
     document = models.ForeignKey(
@@ -152,7 +258,18 @@ class DocumentReceiver(BaseModel):
 class DocumentSignature(BaseModel):
     SIGNED = "signed"
     UNSIGNED = "unsigned"
-    SIGNATURE_STATUS_CHOICES = [(SIGNED, SIGNED), (UNSIGNED, UNSIGNED)]
+    PENDING = "pending"
+    TIMEOUT = "timeout"
+    REJECTED = "rejected"
+    FAILED = "failed"
+    SIGNATURE_STATUS_CHOICES = [
+        (SIGNED, SIGNED),
+        (UNSIGNED, UNSIGNED),
+        (PENDING, PENDING),
+        (TIMEOUT, TIMEOUT),
+        (REJECTED, REJECTED),
+        (FAILED, FAILED),
+    ]
 
     document = models.ForeignKey(
         "documents.Document",
@@ -176,6 +293,14 @@ class DocumentSignature(BaseModel):
         default=UNSIGNED
     )
     is_signature_visible = models.BooleanField(default=False)
+    transaction_id = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         ordering = ['order']
+
+    def update_fields(self, **kwargs):
+        for field, value in kwargs.items():
+            if hasattr(self, field):
+                setattr(self, field, value)
+
+        self.save()

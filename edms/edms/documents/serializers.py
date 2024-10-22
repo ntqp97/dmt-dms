@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from edms.assets.models import Asset
 from edms.assets.serializers import AssetSerializer
+from edms.common.upload_helper import validate_file_type
 from edms.documents.models import Document, DocumentSignature
 from edms.documents.models import DocumentReceiver
 from edms.organization.models import OrganizationUnit
@@ -175,13 +176,13 @@ class DocumentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["document_code"]
 
-    def validate_file_type(self, file, allowed_extensions):
-        _, file_extension = os.path.splitext(file.name)
-        if file_extension.replace(".", "") not in allowed_extensions:
-            raise serializers.ValidationError(
-                {"detail": f"Unsupported file type: {file_extension}."},
-            )
-        return file
+    # def validate_file_type(self, file, allowed_extensions):
+    #     _, file_extension = os.path.splitext(file.name)
+    #     if file_extension.replace(".", "") not in allowed_extensions:
+    #         raise serializers.ValidationError(
+    #             {"detail": f"Unsupported file type: {file_extension}."},
+    #         )
+    #     return file
 
     def validate(self, data):
         attachment_files = data.get("attachment_files", [])
@@ -225,15 +226,15 @@ class DocumentSerializer(serializers.ModelSerializer):
         # Validate file types
         for file in attachment_files:
             allowed_extensions = ["pdf", "doc", "docx"]
-            self.validate_file_type(file, allowed_extensions)
+            validate_file_type(file, allowed_extensions)
 
         for file in appendix_files:
             allowed_extensions = ["pdf", "doc", "docx"]
-            self.validate_file_type(file, allowed_extensions)
+            validate_file_type(file, allowed_extensions)
 
         for file in signature_files:
             allowed_extensions = ["pdf"]
-            self.validate_file_type(file, allowed_extensions)
+            validate_file_type(file, allowed_extensions)
 
         return data
 
@@ -280,10 +281,17 @@ class DocumentSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         request = self.context.get('request', None)
         data = super().to_representation(instance)
-        data['signers_flow'] = DocumentSignatureSerializer(instance.signatures.all(), many=True).data
+        data['signers_flow'] = DocumentSignatureSerializer(
+            instance.signatures.all(),
+            many=True,
+            context=self.context
+        ).data
         if request:
             if instance.created_by.id == request.user.id:
-                data["sender"] = UserSerializer(request.user).data
+                data["sender"] = UserSerializer(
+                    request.user,
+                    context=self.context
+                ).data
                 data["arrival_at"] = int((float(instance.created_at.timestamp())) * 1000)
             else:
                 document_signer_or_receiver = (
@@ -292,7 +300,10 @@ class DocumentSerializer(serializers.ModelSerializer):
                 )
 
                 if document_signer_or_receiver:
-                    data["sender"] = UserSerializer(document_signer_or_receiver.created_by).data
+                    data["sender"] = UserSerializer(
+                        document_signer_or_receiver.created_by,
+                        context=self.context
+                    ).data
                     data["arrival_at"] = int((float(document_signer_or_receiver.created_at.timestamp())) * 1000)
         attachment_files = AssetSerializer(
             Asset.objects.filter(
@@ -300,7 +311,7 @@ class DocumentSerializer(serializers.ModelSerializer):
                 document_id=instance.id,
             ),
             many=True,
-            context={'request': request}
+            context=self.context
         ).data
         appendix_files = AssetSerializer(
             Asset.objects.filter(
@@ -308,7 +319,7 @@ class DocumentSerializer(serializers.ModelSerializer):
                 document_id=instance.id,
             ),
             many=True,
-            context={'request': request}
+            context=self.context
         ).data
         signature_files = AssetSerializer(
             Asset.objects.filter(
@@ -316,7 +327,7 @@ class DocumentSerializer(serializers.ModelSerializer):
                 document_id=instance.id,
             ),
             many=True,
-            context={'request': request}
+            context=self.context
         ).data
 
         data["attachment_files"] = attachment_files

@@ -15,9 +15,12 @@ from ...common.app_status import ErrorResponse
 from ...common.helper import custom_error
 from ...common.pagination import StandardResultsSetPagination
 from ...common.permissions import IsOwnerOrAdmin
-from .serializers import UserLoginSerializer
-from .serializers import UserRegisterSerializer
-from .serializers import UserSerializer
+from .serializers import (
+    UserLoginSerializer,
+    UpdateUserSignatureSerializer,
+    UserRegisterSerializer,
+    UserSerializer
+)
 
 
 class UserViewSet(  # viewsets.ModelViewSet):
@@ -31,6 +34,7 @@ class UserViewSet(  # viewsets.ModelViewSet):
         "list": UserSerializer,
         "register": UserRegisterSerializer,
         "login": UserLoginSerializer,
+        "update_signature": UpdateUserSignatureSerializer,
         # "logout": LogoutSerializer,
         # "resend_email": ResendEmailSerializer,
         # "forgot_password": ForgotPasswordSerializer,
@@ -117,10 +121,40 @@ class UserViewSet(  # viewsets.ModelViewSet):
             user = serializer.validated_data
             refresh = TokenObtainPairSerializer.get_token(user)
             data = AppResponse.LOGIN_SUCCESS.success_response
-            data["results"] = UserSerializer(user).data
+            data["results"] = UserSerializer(
+                user,
+                context={
+                    'request': request,
+                }
+            ).data
             data["refresh"] = str(refresh)
             data["access"] = str(refresh.access_token)
             response = Response(data, status=AppResponse.LOGIN_SUCCESS.status_code)
+        else:
+            response = ErrorResponse(
+                custom_error("USER", serializer.errors),
+            ).failure_response()
+        return response
+
+    @action(
+        detail=False,
+        methods=["put"],
+        url_path="signatures",
+    )
+    def update_signature(self, request):
+        serializer = self.get_serializer_class()(
+            data=request.data,
+            context=self.get_serializer_context(),
+        )
+        if serializer.is_valid():
+            serializer.update(request.user, serializer.validated_data)
+            response = Response(
+                UserSerializer(
+                    request.user,
+                    context={
+                        'request': request,
+                    }
+                ).data, status=status.HTTP_200_OK)
         else:
             response = ErrorResponse(
                 custom_error("USER", serializer.errors),

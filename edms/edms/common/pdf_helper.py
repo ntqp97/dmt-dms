@@ -4,6 +4,7 @@ from PyPDF2 import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.colors import Color
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import io
@@ -60,3 +61,48 @@ def add_watermark_to_pdf(input_pdf, watermark_text, file_type):
     writer.write(output_pdf)
     output_pdf.seek(0)
     return output_pdf
+
+
+def convert_float_objects_to_floats(coords):
+    return [float(coord) for coord in coords]
+
+
+def is_positive_integer(string):
+    return string.isdigit() and int(string) > 0
+
+
+def add_image_stamp_to_pdf(stamp_image, coords, page_width, page_height):
+    packet = io.BytesIO()
+    can = canvas.Canvas(packet, pagesize=letter)
+    scale_percentage = 0.2
+
+    image = ImageReader(stamp_image)
+    x, y, _, _ = coords
+
+    desired_width = page_width * scale_percentage
+    desired_height = page_height * scale_percentage
+
+    x_centered = x - (desired_width / 2)
+    y_centered = y - (desired_height / 2) - 50
+
+    can.drawImage(image, x_centered, y_centered, desired_width, desired_height, mask='auto')
+
+    can.save()
+    packet.seek(0)
+    return PdfReader(packet)
+
+
+def get_signature_field_coordinates(pages, input_pdf=None):
+    if input_pdf:
+        reader = PdfReader(input_pdf)
+        pages = reader.pages
+    coordinates_dict = {}
+    for index, page in enumerate(pages):
+        if "/Annots" in page:
+            for annot in page["/Annots"]:
+                content_form = annot.get_object().get("/Contents")
+                if content_form and is_positive_integer(content_form):
+                    if content_form not in coordinates_dict:
+                        coordinates_dict[content_form] = []
+                    coordinates_dict[content_form].append(annot.get_object().get("/Rect"))
+    return coordinates_dict
