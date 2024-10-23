@@ -153,6 +153,15 @@ class Document(BaseModel):
             # TODO Validate signature stream
             if self.document_category != Document.SIGNING_DOCUMENT:
                 raise ValueError("The document cannot be signed because it is not categorized as a signing document.")
+
+            signature_file = Asset.objects.filter(
+                file_type=Asset.SIGNATURE_FILE,
+                document_id=self.id,
+            )
+
+            if not signature_file.exists() or signature_file.count() > 1:
+                raise ValueError("Cannot sign document because it requires one signature file.")
+
             self.update_fields(
                 document_category=Document.IN_PROGRESS_SIGNING_DOCUMENT,
                 updated_by=request.user,
