@@ -96,9 +96,11 @@ def stamp_signatures_to_pdf(asset, pages):
 
             if asset.document.document_category in [
                 Document.SIGNING_DOCUMENT,
-                Document.COMPLETED_SIGNING_DOCUMENT
             ] or (
-                asset.document.document_category == Document.IN_PROGRESS_SIGNING_DOCUMENT and
+                asset.document.document_category in [
+                    Document.IN_PROGRESS_SIGNING_DOCUMENT,
+                    Document.COMPLETED_SIGNING_DOCUMENT,
+                ] and
                 document_signature.signature_status == DocumentSignature.SIGNED
             ):
                 user_signature = document_signature.signer.user_signature_entries.filter(is_default=True).first()
