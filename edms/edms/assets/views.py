@@ -25,7 +25,7 @@ class AssetViewSet(viewsets.GenericViewSet):
             bucket_name=settings.AWS_STORAGE_BUCKET_NAME,
         )
 
-        output_pdf = add_watermark_to_pdf(input_pdf, request.user.name, asset.file_type)
+        output_pdf = add_watermark_to_pdf(input_pdf, request.user.name, asset)
 
         response = HttpResponse(output_pdf, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{asset.asset_name}_watermarked.pdf"'
