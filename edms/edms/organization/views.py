@@ -33,5 +33,11 @@ class OrganizationUnitViewSet(viewsets.ModelViewSet):
     )
     def get_organization_unit_tree(self, request):
         root_units = OrganizationUnit.objects.filter(parent__isnull=True)
-        serializer = OrganizationUnitTreeSerializer(root_units, many=True)
+        serializer = OrganizationUnitTreeSerializer(
+            root_units,
+            many=True,
+            context={
+                'request': request,
+            },
+        )
         return Response(serializer.data)

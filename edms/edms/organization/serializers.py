@@ -20,4 +20,4 @@ class OrganizationUnitTreeSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "level", "children", "users"]
 
     def get_children(self, obj):
-        return OrganizationUnitTreeSerializer(obj.get_children(), many=True).data
+        return OrganizationUnitTreeSerializer(obj.get_children(), many=True, context=self.context).data
