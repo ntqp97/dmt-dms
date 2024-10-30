@@ -136,7 +136,7 @@ class MySignHelper:
                 "hash": hashes,
                 "hashAlgo": hash_algo,
                 "signAlgo": sign_algo,
-                "async": 1
+                "async": 2
             }
             headers = {"Authorization": f"Bearer {access_token}"}
             response = requests.post(url, json=request_data, headers=headers).json()
