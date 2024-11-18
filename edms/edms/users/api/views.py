@@ -1,3 +1,4 @@
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins
 from rest_framework import status
 from rest_framework import viewsets
@@ -9,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from edms.users.models import User
+from .filters import UserFilter
 
 from ...common.app_status import AppResponse
 from ...common.app_status import ErrorResponse
@@ -21,6 +23,7 @@ from .serializers import (
     UserRegisterSerializer,
     UserSerializer
 )
+from ...search.filters import UnaccentSearchFilter
 
 
 class UserViewSet(  # viewsets.ModelViewSet):
@@ -43,7 +46,17 @@ class UserViewSet(  # viewsets.ModelViewSet):
     default_serializer_class = UserSerializer
     pagination_class = StandardResultsSetPagination
     queryset = User.objects.all()
-    # lookup_field = "pk"
+    filter_backends = (
+        DjangoFilterBackend,
+        UnaccentSearchFilter,
+    )
+    filterset_class = UserFilter
+    search_fields = [
+        "name",
+        "email",
+        "position",
+        "phone_number",
+    ]
 
     def get_permissions(self):
         if self.action in ["destroy"]:

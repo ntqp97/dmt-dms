@@ -4,6 +4,7 @@ from edms.assets.models import Asset
 from edms.common.basemodels import BaseModel
 from edms.documents.signing_utils import MySignHelper
 from edms.users.models import User
+import mimetypes
 
 
 # Create your models here.
@@ -65,7 +66,6 @@ class Document(BaseModel):
         self.save()
 
     def associate_assets(self, files, file_type):
-        import mimetypes
         Asset.objects.bulk_create(
             [
                 Asset(

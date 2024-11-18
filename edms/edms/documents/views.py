@@ -19,6 +19,7 @@ from edms.documents.filters import DocumentFilter
 from edms.documents.models import Document
 from edms.documents.serializers import DocumentSerializer, SendDocumentSerializer
 from edms.organization.models import OrganizationUnit
+from edms.search.filters import UnaccentSearchFilter
 from edms.users.models import User
 from django.conf import settings
 
@@ -29,21 +30,14 @@ class DocumentViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     serializer_class = DocumentSerializer
     filter_backends = (
-        filters.SearchFilter,
-        DjangoFilterBackend
+        DjangoFilterBackend,
+        UnaccentSearchFilter,
     )
     filterset_class = DocumentFilter
     search_fields = [
-        "document_code",
         "document_title",
         "document_summary",
-        "document_type",
-        "urgency_status",
-        "document_form",
-        "security_type",
         "document_number_reference_code",
-        "sector",
-        "processing_status"
     ]
 
     def get_permissions(self):

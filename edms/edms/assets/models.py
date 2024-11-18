@@ -42,6 +42,13 @@ class Asset(BaseModel):
         null=True,
         blank=True,
     )
+    meeting_schedule = models.ForeignKey(
+        "meeting_schedule.MeetingSchedule",
+        related_name="meeting_schedule_files",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
     file = models.FileField(
         upload_to=get_path_files,
         blank=True,

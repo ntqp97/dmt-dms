@@ -96,6 +96,7 @@ LOCAL_APPS = [
     "edms.organization",
     "edms.documents",
     "edms.assets",
+    "edms.meeting_schedule",
     # Your stuff: custom apps go here
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
