@@ -16,7 +16,7 @@ from edms.common.helper import custom_error
 from edms.common.pagination import StandardResultsSetPagination
 from edms.common.permissions import IsOwnerOrAdmin
 from edms.documents.filters import DocumentFilter
-from edms.documents.models import Document
+from edms.documents.models import Document, DocumentSignature
 from edms.documents.serializers import DocumentSerializer, SendDocumentSerializer
 from edms.organization.models import OrganizationUnit
 from edms.search.filters import UnaccentSearchFilter
@@ -103,48 +103,60 @@ class DocumentViewSet(viewsets.ModelViewSet):
         url_path="statistics",
     )
     def statistics(self, request):
-        user = self.request.user
+        user = request.user
         created_docs_count = Document.objects.filter(created_by=user).count()
-        sent_docs_count = (
-            Document.objects.filter(
-                document_receivers__created_by=user,
-            )
-            .exclude(
-                document_receivers__receiver=user,
-            )
-            .distinct()
-            .count()
-        )
-
         received_docs_count = (
             Document.objects.filter(document_receivers__receiver=user)
             .distinct()
             .count()
         )
-        read_docs_count = (
+        forwarded_docs_count = (
             Document.objects.filter(
+                document_receivers__created_by=user,
+            ).exclude(
                 document_receivers__receiver=user,
-                document_receivers__is_read=True,
-            )
-            .distinct()
-            .count()
+            ).distinct().count()
         )
         unread_docs_count = (
             Document.objects.filter(
                 document_receivers__receiver=user,
-                document_receivers__is_read=False,
-            )
-            .distinct()
-            .count()
+                document_receivers__is_read=False
+            ).distinct().count()
+        )
+        pending_signing_docs_count = (
+            Document.objects.filter(
+                document_category=Document.IN_PROGRESS_SIGNING_DOCUMENT,
+                signatures__signer=user,
+                signatures__signature_status__in=[
+                    DocumentSignature.UNSIGNED,
+                    DocumentSignature.FAILED,
+                    DocumentSignature.TIMEOUT,
+                ],
+                signatures__is_signature_visible=True
+            ).distinct().count()
+        )
+
+        pending_initial_signing_docs_count = (
+            Document.objects.filter(
+                document_category=Document.IN_PROGRESS_SIGNING_DOCUMENT,
+                signatures__signer=user,
+                signatures__signature_status__in=[
+                    DocumentSignature.UNSIGNED,
+                    DocumentSignature.FAILED,
+                    DocumentSignature.TIMEOUT,
+                ],
+                signatures__is_signature_visible=False
+            ).distinct().count()
         )
 
         data = AppResponse.STATISTICS_DOCUMENTS.success_response
         data["results"] = {
-            "created_docs": created_docs_count,
-            "sent_docs": sent_docs_count,
-            "received_docs": received_docs_count,
-            "read_docs": read_docs_count,
-            "unread_docs": unread_docs_count,
+            "created": created_docs_count,
+            "received": received_docs_count,
+            "forwarded": forwarded_docs_count,
+            "unread": unread_docs_count,
+            "pending_signing": pending_signing_docs_count,
+            "pending_initial_signing": pending_initial_signing_docs_count,
         }
         return Response(data, status=AppResponse.STATISTICS_DOCUMENTS.status_code)
 

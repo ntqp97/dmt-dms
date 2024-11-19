@@ -61,6 +61,11 @@ class SendDocumentSerializer(serializers.Serializer):
         recipient_type = data.get('recipient_type')
         recipient_ids = list(map(int, data.get("recipient_id", []).split(',')))
 
+        if document.document_category not in [Document.NORMAL_DOCUMENT, Document.COMPLETED_SIGNING_DOCUMENT]:
+            raise serializers.ValidationError(
+                {"detail": "This document category does not allow sending."},
+            )
+
         if recipient_type == 'user':
             if request.user.id in recipient_ids:
                 raise serializers.ValidationError(

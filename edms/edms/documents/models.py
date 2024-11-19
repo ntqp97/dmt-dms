@@ -177,8 +177,8 @@ class Document(BaseModel):
             )
         document_signature = self.signatures.filter(signer=request.user).first()
 
-        if document_signature in [DocumentSignature.SIGNED, DocumentSignature.PENDING]:
-            raise ValueError("You have SIGNED/PENDING the signing.")
+        if document_signature in [DocumentSignature.SIGNED, DocumentSignature.PENDING, DocumentSignature.REJECTED]:
+            raise ValueError("You have SIGNED/PENDING/REJECTED the signing.")
 
         previous_signatures = self.signatures.filter(
             order__lt=document_signature.order
