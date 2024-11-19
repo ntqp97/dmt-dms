@@ -8,6 +8,7 @@ from edms.common.basemodels import BaseModel
 from rest_framework.generics import get_object_or_404
 
 from edms.common.s3_helper import S3FileManager
+from edms.core.models import SoftDeleteModel
 
 
 def get_path_files(instance, filename):
@@ -23,7 +24,7 @@ def get_path_files(instance, filename):
 
 
 # Create your models here.
-class Asset(BaseModel):
+class Asset(SoftDeleteModel, BaseModel):
     ATTACHMENT = "attachment"
     APPENDIX = "appendix"
     SIGNATURE_FILE = "signature_file"

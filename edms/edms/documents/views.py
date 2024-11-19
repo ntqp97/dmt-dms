@@ -57,6 +57,16 @@ class DocumentViewSet(viewsets.ModelViewSet):
         ).distinct()
         return queryset.order_by("-id")
 
+    def destroy(self, request, *args, **kwargs):
+        document = self.get_object()
+        if document.document_category != Document.SIGNING_DOCUMENT:
+            return Response(
+                AppResponse.DELETE_DOCUMENTS_FAILURE.success_response,
+                status=AppResponse.DELETE_DOCUMENTS_FAILURE.status_code
+            )
+
+        return super().destroy(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 

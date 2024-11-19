@@ -2,13 +2,14 @@ from django.db import models, transaction
 
 from edms.assets.models import Asset
 from edms.common.basemodels import BaseModel
+from edms.core.models import SoftDeleteModel
 from edms.documents.signing_utils import MySignHelper
 from edms.users.models import User
 import mimetypes
 
 
 # Create your models here.
-class Document(BaseModel):
+class Document(SoftDeleteModel, BaseModel):
     SIGNING_DOCUMENT = "signing_document"
     NORMAL_DOCUMENT = "normal_document"
     IN_PROGRESS_SIGNING_DOCUMENT = "in_progress_signing_document"
