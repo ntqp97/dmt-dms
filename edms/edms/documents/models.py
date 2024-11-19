@@ -149,6 +149,10 @@ class Document(SoftDeleteModel, BaseModel):
             ]
         )
 
+    def update_document_signature_flow(self, signers):
+        self.signatures.all().delete()
+        self.create_document_signature_flow(signers)
+
     def start_sign(self, request):
         try:
             # TODO Validate signature stream

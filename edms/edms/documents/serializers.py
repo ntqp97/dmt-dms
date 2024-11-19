@@ -179,7 +179,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "attachment_documents",
             "document_category",
         ]
-        read_only_fields = ["document_code"]
+        read_only_fields = ["document_code", "document_category"]
 
     # def validate_file_type(self, file, allowed_extensions):
     #     _, file_extension = os.path.splitext(file.name)
@@ -201,17 +201,19 @@ class DocumentSerializer(serializers.ModelSerializer):
                 {"detail": "You cannot include yourself as a receiver."},
             )
 
+        signers_data = data.get("signers_flow", self.context.get("signers_flow", []))
+        serializer = DocumentSignatureSerializer(data=signers_data, many=True)
+        if serializer.is_valid():
+            data['signers_flow'] = signers_data
+        else:
+            raise serializers.ValidationError(
+                {"detail": f"{serializer.errors}."},
+            )
+
         if signature_files:
             attachment_document_ids = data.get("attachment_document_ids")
             attachment_document_ids = list(map(int, attachment_document_ids.split(','))) if attachment_document_ids else []
-            signers_data = data.get("signers_flow", self.context.get("signers_flow", []))
-            serializer = DocumentSignatureSerializer(data=signers_data, many=True)
-            if serializer.is_valid():
-                data['signers_flow'] = signers_data
-            else:
-                raise serializers.ValidationError(
-                    {"detail": f"{serializer.errors}."},
-                )
+
             if len(signature_files) > 1:
                 raise serializers.ValidationError(
                     {"detail": "You can only include one signature file."},
@@ -221,12 +223,12 @@ class DocumentSerializer(serializers.ModelSerializer):
                     {"detail": "Signers are required when including a signature file."},
                 )
 
-        if not attachment_files and not appendix_files and not signature_files:
-            raise serializers.ValidationError(
-                {
-                    "detail": "At least one of the fields 'files' must be provided.",
-                },
-            )
+        # if not attachment_files and not appendix_files and not signature_files:
+        #     raise serializers.ValidationError(
+        #         {
+        #             "detail": "At least one of the fields 'files' must be provided.",
+        #         },
+        #     )
 
         # Validate file types
         for file in attachment_files:
@@ -252,6 +254,13 @@ class DocumentSerializer(serializers.ModelSerializer):
         signers_flow = validated_data.pop("signers_flow", [])
         attachment_document_ids = validated_data.pop("attachment_document_ids", [])
         attachment_document_ids = list(map(int, attachment_document_ids.split(','))) if attachment_document_ids else []
+
+        if not attachment_files and not appendix_files and not signature_files:
+            raise serializers.ValidationError(
+                {
+                    "detail": "At least one of the fields 'files' must be provided.",
+                },
+            )
 
         validated_data["document_code"] = uuid.uuid4()
         validated_data["document_category"] = (
@@ -282,6 +291,39 @@ class DocumentSerializer(serializers.ModelSerializer):
         document.associate_assets(signature_files, Asset.SIGNATURE_FILE)
 
         return document
+
+    def update(self, instance, validated_data):
+        attachment_files = validated_data.pop("attachment_files", [])
+        appendix_files = validated_data.pop("appendix_files", [])
+        signature_files = validated_data.pop("signature_files", [])
+        signers_flow = validated_data.pop("signers_flow", [])
+        _ = validated_data.pop("receivers_ids", [])
+        attachment_document_ids = validated_data.pop("attachment_document_ids", [])
+        attachment_document_ids = list(map(int, attachment_document_ids.split(','))) if attachment_document_ids else []
+
+        old_signature_files = Asset.objects.filter(
+            file_type=Asset.SIGNATURE_FILE,
+            document_id=instance.id,
+        ).exists()
+
+        if signature_files and old_signature_files:
+            raise serializers.ValidationError(
+                {"detail": "Signature files already exist. You cannot upload another one."},
+            )
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+
+        attachment_document = Document.objects.filter(pk__in=attachment_document_ids)
+        instance.attachment_documents.set(attachment_document)
+        instance.update_document_signature_flow(signers=signers_flow)
+
+        instance.associate_assets(attachment_files, Asset.ATTACHMENT)
+        instance.associate_assets(appendix_files, Asset.APPENDIX)
+        instance.associate_assets(signature_files, Asset.SIGNATURE_FILE)
+        return instance
 
     def to_representation(self, instance):
         request = self.context.get('request', None)

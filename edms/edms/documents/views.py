@@ -106,6 +106,38 @@ class DocumentViewSet(viewsets.ModelViewSet):
             ).failure_response()
         return response
 
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        signers_list = self.process_signers(request.data.get("signers_flow"))
+        if instance.document_category != Document.SIGNING_DOCUMENT:
+            return Response(
+                AppResponse.UPDATE_DOCUMENTS_FAILURE.success_response,
+                status=AppResponse.UPDATE_DOCUMENTS_FAILURE.status_code
+            )
+
+        serializer = self.get_serializer(
+            instance,
+            data=request.data,
+            context={
+                'request': request,
+                'signers_flow': signers_list
+            },
+            partial=True  # Sử dụng partial=True nếu chỉ cần cập nhật một số trường
+        )
+        if serializer.is_valid():
+            self.perform_update(serializer)
+            data = AppResponse.UPDATE_DOCUMENTS.success_response
+            data["results"] = serializer.data
+            response = Response(
+                data,
+                status=AppResponse.UPDATE_DOCUMENTS.status_code,
+            )
+        else:
+            response = ErrorResponse(
+                custom_error("DOCUMENT", serializer.errors),
+            ).failure_response()
+        return response
+
     @action(
         methods=["get"],
         detail=False,
