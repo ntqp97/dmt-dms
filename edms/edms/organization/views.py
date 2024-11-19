@@ -23,7 +23,7 @@ class OrganizationUnitViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
             self.permission_classes = [IsAuthenticated]
-        if self.action in ["update", "partial_update", "destroy"]:
+        if self.action in ["create", "update", "partial_update", "destroy"]:
             self.permission_classes = [IsAdminUser]
         return super(self.__class__, self).get_permissions()
 

@@ -9,4 +9,5 @@ urlpatterns = [
     path(f"{API_PREFIX}", include("edms.documents.urls")),
     path(f"{API_PREFIX}", include("edms.assets.urls")),
     path(f"{API_PREFIX}", include("edms.meeting_schedule.urls")),
+    path(f"{API_PREFIX}", include("edms.options.urls")),
 ]
