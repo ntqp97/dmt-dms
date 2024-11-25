@@ -16,7 +16,7 @@ from edms.common.helper import custom_error
 from edms.common.pagination import StandardResultsSetPagination
 from edms.common.permissions import IsOwnerOrAdmin
 from edms.documents.filters import DocumentFilter
-from edms.documents.models import Document, DocumentSignature
+from edms.documents.models import Document, DocumentSignature, DocumentReceiver
 from edms.documents.serializers import DocumentSerializer, SendDocumentSerializer
 from edms.organization.models import OrganizationUnit
 from edms.search.filters import UnaccentSearchFilter
@@ -202,28 +202,28 @@ class DocumentViewSet(viewsets.ModelViewSet):
         }
         return Response(data, status=AppResponse.STATISTICS_DOCUMENTS.status_code)
 
-    # @action(
-    #     methods=["put"],
-    #     detail=True,
-    #     permission_classes=[IsAuthenticated],
-    #     serializer_class=MarkAsReadSerializer,
-    #     url_path="mark-as-read"
-    # )
-    # def mark_as_read(self, request, pk=None):
-    #     try:
-    #         obj = get_object_or_404(self.get_queryset(), id=pk)
-    #         document_receiver = DocumentReceiver.objects.get(document_id=pk, receiver=request.user)
-    #     except DocumentReceiver.DoesNotExist:
-    #         return Response({"detail": "DocumentReceiver not found."}, status=status.HTTP_404_NOT_FOUND)
-    #
-    #     if document_receiver.is_read:
-    #         return Response({"detail": "Document already marked as read."}, status=status.HTTP_400_BAD_REQUEST)
-    #
-    #     serializer = MarkAsReadSerializer(document_receiver, data=request.data, partial=True)
-    #     if serializer.is_valid():
-    #         serializer.save()
-    #         return Response({"detail": "Document marked as read."}, status=status.HTTP_200_OK)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    @action(
+        methods=["PUT"],
+        detail=True,
+        permission_classes=[IsAuthenticated],
+        serializer_class=None,
+        url_path="mark-as-read"
+    )
+    def mark_as_read(self, request, pk=None):
+        try:
+            document = get_object_or_404(self.get_queryset(), id=pk)
+            document_receiver = DocumentReceiver.objects.get(
+                document=document,
+                receiver=request.user
+            )
+        except DocumentReceiver.DoesNotExist:
+            return Response({"detail": "DocumentReceiver not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if document_receiver.is_read:
+            return Response({"detail": "Document already marked as read."}, status=status.HTTP_400_BAD_REQUEST)
+
+        document_receiver.mark_as_read()
+        return Response({"detail": "Document marked as read."}, status=status.HTTP_200_OK)
 
     @action(
         methods=["POST"],

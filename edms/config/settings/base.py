@@ -5,6 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from firebase_admin import initialize_app, credentials
 
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
 # edms/
@@ -89,6 +90,7 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt",
     "corsheaders",
     "drf_spectacular",
+    "fcm_django",
 ]
 
 LOCAL_APPS = [
@@ -98,6 +100,7 @@ LOCAL_APPS = [
     "edms.assets",
     "edms.meeting_schedule",
     "edms.options",
+    "edms.notifications",
     # Your stuff: custom apps go here
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
@@ -383,7 +386,24 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
 }
 
+# MY SIGN
 MS_CLIENT_ID = env("MS_CLIENT_ID")
 MS_CLIENT_SECRET = env("MS_CLIENT_SECRET")
 MS_BASE_URL = env("MS_BASE_URL")
 MS_PROFILE_ID = env("MS_PROFILE_ID")
+
+# FIREBASE
+GOOGLE_APPLICATION_CREDENTIALS = env("FCM_CONFIG_FILE")
+FIREBASE_APP = initialize_app(credentials.Certificate(GOOGLE_APPLICATION_CREDENTIALS))
+FCM_DJANGO_SETTINGS = {
+    # default: _('FCM Django')
+    "APP_VERBOSE_NAME": "dmt-eoffice",
+    # true if you want to have only one active device per registered user at a time
+    # default: False
+    "ONE_DEVICE_PER_USER": True,
+    # devices to which notifications cannot be sent,
+    # are deleted upon receiving error response from FCM
+    # default: False
+    "DELETE_INACTIVE_DEVICES": False,
+}
+

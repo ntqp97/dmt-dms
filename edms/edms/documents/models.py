@@ -1,9 +1,11 @@
 from django.db import models, transaction
+from django.utils.timezone import now
 
 from edms.assets.models import Asset
 from edms.common.basemodels import BaseModel
 from edms.core.models import SoftDeleteModel
 from edms.documents.signing_utils import MySignHelper
+from edms.notifications.services import NotificationService
 from edms.users.models import User
 import mimetypes
 
@@ -153,6 +155,7 @@ class Document(SoftDeleteModel, BaseModel):
         self.signatures.all().delete()
         self.create_document_signature_flow(signers)
 
+    @transaction.atomic
     def start_sign(self, request):
         try:
             # TODO Validate signature stream
@@ -172,6 +175,16 @@ class Document(SoftDeleteModel, BaseModel):
                 updated_by=request.user,
             )
             # TODO Noti to signer
+            NotificationService.send_notification_to_users(
+                sender=request.user,
+                receivers=[self.signatures.filter(order=1).first().signer],
+                title="Yêu cầu ký tài liệu",
+                body=f"Tài liệu {self.document_title} cần được ký. Vui lòng kiểm tra và hoàn tất.",
+                image=None,
+                data={
+                    "document_id": self.id
+                }
+            )
         except Exception as e:
             raise ValueError(f"Failed to update document state: {e}")
 
@@ -267,6 +280,12 @@ class DocumentReceiver(BaseModel):
     )
     is_read = models.BooleanField(default=False)
     read_at = models.DateTimeField(null=True, blank=True)
+
+    def mark_as_read(self):
+        self.is_read = True
+        self.read_at = now()
+        self.updated_by = self.receiver
+        self.save()
 
 
 class DocumentSignature(BaseModel):
