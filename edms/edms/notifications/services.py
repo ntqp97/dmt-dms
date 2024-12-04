@@ -1,5 +1,6 @@
 import logging
 
+from django.db import transaction
 from fcm_django.models import FCMDevice
 from firebase_admin import messaging
 from firebase_admin.exceptions import FirebaseError
@@ -30,6 +31,7 @@ class FirebaseService:
 
 class NotificationService:
     @staticmethod
+    @transaction.atomic
     def send_notification_to_users(sender, receivers, title, body, image=None, data=None):
         devices = FCMDevice.objects.filter(user__in=receivers)
         users_with_devices = set(devices.values_list("user", flat=True))
@@ -49,7 +51,7 @@ class NotificationService:
                         created_by=sender,
                         notification=notification,
                         receiver_id=user_id,
-                        is_pushed=True
+                        is_push=True
                     )
                 )
 
@@ -58,7 +60,7 @@ class NotificationService:
                     NotificationReceiver(
                         notification=notification,
                         receiver=user,
-                        is_pushed=False
+                        is_push=False
                     )
                 )
 

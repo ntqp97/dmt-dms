@@ -100,14 +100,17 @@ class Document(SoftDeleteModel, BaseModel):
             ],
         )
 
+    @transaction.atomic()
     def send_to_users(self, sender, receivers):
         if self.created_by in receivers:
             raise ValueError("Cannot send the document to the creator.")
         if sender in receivers:
             raise ValueError("Cannot send the document to yourself.")
         document_receivers = []
+        actually_receivers = []
         for receiver in receivers:
             if not DocumentReceiver.objects.filter(document=self, receiver=receiver).exists():
+                actually_receivers.append(receiver)
                 document_receivers.append(
                     DocumentReceiver(
                         document=self,
@@ -115,18 +118,33 @@ class Document(SoftDeleteModel, BaseModel):
                         receiver=receiver
                     )
                 )
-        return document_receivers if not document_receivers else DocumentReceiver.objects.bulk_create(document_receivers)
+        if document_receivers:
+            document_receivers = DocumentReceiver.objects.bulk_create(document_receivers)
+            NotificationService.send_notification_to_users(
+                sender=sender,
+                receivers=actually_receivers,
+                title="Tài liệu mới được gửi đến bạn",
+                body=f"Tài liệu '{self.document_title}' đã được gửi đến bạn.",
+                image=None,
+                data={
+                    "document_id": str(self.id)
+                }
+            )
+        return document_receivers
 
+    @transaction.atomic()
     def send_to_organizations(self, sender, organizations):
         receivers_in_orgs = User.objects.filter(organization_unit__in=organizations)
 
         document_receivers = []
+        actually_receivers = []
         for receiver in receivers_in_orgs:
             if receiver == self.created_by:
                 continue
             if receiver == sender:
                 continue
             if not DocumentReceiver.objects.filter(document=self, receiver=receiver).exists():
+                actually_receivers.append(receiver)
                 document_receivers.append(
                     DocumentReceiver(
                         document=self,
@@ -134,8 +152,19 @@ class Document(SoftDeleteModel, BaseModel):
                         receiver=receiver
                     )
                 )
-
-        return document_receivers if not document_receivers else DocumentReceiver.objects.bulk_create(document_receivers)
+        if document_receivers:
+            document_receivers = DocumentReceiver.objects.bulk_create(document_receivers)
+            NotificationService.send_notification_to_users(
+                sender=sender,
+                receivers=actually_receivers,
+                title="Tài liệu mới được gửi đến bạn",
+                body=f"Tài liệu '{self.document_title}' đã được gửi đến bạn.",
+                image=None,
+                data={
+                    "document_id": str(self.id)
+                }
+            )
+        return document_receivers
 
     def create_document_signature_flow(self, signers):
         DocumentSignature.objects.bulk_create(
@@ -182,7 +211,7 @@ class Document(SoftDeleteModel, BaseModel):
                 body=f"Tài liệu {self.document_title} cần được ký. Vui lòng kiểm tra và hoàn tất.",
                 image=None,
                 data={
-                    "document_id": self.id
+                    "document_id": str(self.id)
                 }
             )
         except Exception as e:

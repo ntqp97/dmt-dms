@@ -10,6 +10,7 @@ from edms.assets.serializers import AssetSerializer
 from edms.common.datetime_utils import timestamp_to_datetime_ms, datetime_to_timestamp_ms
 from edms.common.upload_helper import validate_file_type
 from edms.meeting_schedule.models import MeetingSchedule
+from edms.notifications.services import NotificationService
 from edms.users.api.serializers import UserSerializer
 
 myapp_logger = logging.getLogger("django")
@@ -35,6 +36,18 @@ class ReviewMeetingScheduleSerializer(serializers.Serializer):
         instance.note = validated_data.get('note', instance.note)
         instance.updated_by = validated_data.get('updated_by', instance.updated_by)
         instance.save()
+        if instance.status == MeetingSchedule.APPROVED:
+            receivers = list(set([instance.user_contact, instance.user_host] + list(instance.participants.all())))
+            NotificationService.send_notification_to_users(
+                sender=instance.updated_by,
+                receivers=receivers,
+                title="Lịch họp mới đã được đặt",
+                body=f"Lịch họp với topic '{instance.meeting_topic}' đã được đặt.",
+                image=None,
+                data={
+                    "meeting_schedule_id": str(instance.id)
+                }
+            )
         return instance
 
 

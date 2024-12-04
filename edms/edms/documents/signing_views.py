@@ -9,6 +9,7 @@ from .signing_utils import MySignHelper
 from .sigining_serializers import MySignClientAuthenticateSerializer, WebhookMySignRequestSerializer
 from django.conf import settings
 from edms.common.app_status import ErrorResponse
+from ..notifications.services import NotificationService
 
 
 class WebhookMySignAPIView(APIView):
@@ -70,11 +71,30 @@ class WebhookMySignAPIView(APIView):
 
             if next_signature.exists():
                 # TODO Notify the next signer
-                pass
+                NotificationService.send_notification_to_users(
+                    sender=user,
+                    receivers=[next_signature.signer],
+                    title="Yêu cầu ký tài liệu",
+                    body=f"Tài liệu {document_signature.document.document_title} cần được ký. Vui lòng kiểm tra và hoàn tất.",
+                    image=None,
+                    data={
+                        "document_id": str(document_signature.document.id)
+                    }
+                )
             else:
                 document_signature.document.update_fields(
                     document_category=Document.COMPLETED_SIGNING_DOCUMENT,
                     updated_by=user,
+                )
+                NotificationService.send_notification_to_users(
+                    sender=user,
+                    receivers=list(set([signature.signer for signature in document_signature.document.signatures.all()])),
+                    title="Tài liệu đã trình ký thành công",
+                    body=f"Tài liệu {document_signature.document.document_title} đã trình ký thành công.",
+                    image=None,
+                    data={
+                        "document_id": str(document_signature.document.id)
+                    }
                 )
 
 
