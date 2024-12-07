@@ -77,7 +77,7 @@ class WebhookMySignAPIView(APIView):
                 # TODO Notify the next signer
                 NotificationService.send_notification_to_users(
                     sender=user,
-                    receivers=[next_signature.signer],
+                    receivers=[next_signature.first().signer],
                     title="Yêu cầu ký tài liệu",
                     body=f"Tài liệu {document_signature.document.document_title} cần được ký. Vui lòng kiểm tra và hoàn tất.",
                     image=None,
