@@ -10,10 +10,10 @@ from reportlab.pdfbase.ttfonts import TTFont
 import io
 from django.conf import settings
 
-from edms.documents.models import Document, DocumentSignature
-
 
 def add_watermark_to_pdf(input_pdf, watermark_text, asset):
+    from edms.documents.models import Document
+
     font_dir = os.path.join(settings.BASE_DIR, 'edms', 'static', 'fonts')
     pdfmetrics.registerFont(TTFont('DejaVu', f'{font_dir}/DejaVuSans.ttf'))
     pdfmetrics.registerFont(TTFont('DejaVu-Bold', f'{font_dir}/DejaVuSans-Bold.ttf'))
@@ -78,6 +78,7 @@ def is_positive_integer(string):
 
 
 def stamp_signatures_to_pdf(asset, pages):
+    from edms.documents.models import Document, DocumentSignature
     pages_signatures_map = {}
     if asset.file_type != "signature_file":
         return pages_signatures_map
@@ -123,19 +124,11 @@ def stamp_signatures_to_pdf(asset, pages):
 
 def add_image_stamp_to_pdf(stamp_image, coords, page_width, page_height):
     packet = io.BytesIO()
-    can = canvas.Canvas(packet, pagesize=letter)
-    scale_percentage = 0.2
+    can = canvas.Canvas(packet, pagesize=(page_width, page_height))
 
     image = ImageReader(stamp_image)
-    x, y, _, _ = coords
-
-    desired_width = page_width * scale_percentage
-    desired_height = page_height * scale_percentage
-
-    x_centered = x - (desired_width / 2)
-    y_centered = y - (desired_height / 2) - 50
-
-    can.drawImage(image, x_centered, y_centered, desired_width, desired_height, mask='auto')
+    x_min, y_min, x_max, y_max = get_signature_box(coords, page_width, page_height, 0.2, 0.1)
+    can.drawImage(image, x_min, y_min, x_max - x_min, y_max - y_min, mask='auto')
 
     can.save()
     packet.seek(0)
@@ -158,3 +151,45 @@ def get_signature_field_coordinates(pages, input_pdf=None):
                         coordinates_dict[page_num][signer_num] = []
                     coordinates_dict[page_num][signer_num].append(annot.get_object().get("/Rect"))
     return coordinates_dict
+
+
+def get_signature_box(rect, page_width, page_height, width_ratio, height_ratio):
+    x1, y1, x2, y2 = rect
+
+    center_x = (x1 + x2) / 2
+    center_y = (y1 + y2) / 2
+
+    new_width = page_width * width_ratio
+    new_height = page_height * height_ratio
+
+    new_x1 = center_x - new_width / 2
+    new_y1 = center_y - new_height / 2 - 50
+    new_x2 = center_x + new_width / 2
+    new_y2 = center_y + new_height / 2
+
+    return new_x1, new_y1, new_x2, new_y2
+
+
+def get_positions_signature(input_pdf, document_signature):
+    reader = PdfReader(input_pdf)
+    pages = reader.pages
+    sigpage = None
+    coords = None
+    user_signature = document_signature.signer.user_signature_entries.filter(is_default=True).first()
+    signature_img = user_signature.signature_image.file.url
+    for page_num, page in enumerate(pages):
+        if "/Annots" in page:
+            for annot in page["/Annots"]:
+                if str(document_signature.order) == annot.get_object().get("/Contents"):
+                    sigpage = page_num
+                    coords = convert_float_objects_to_floats(annot.get_object().get("/Rect"))
+                    break
+
+    if sigpage and coords and signature_img:
+        page = pages[sigpage]
+        page_width = float(page.mediabox.upper_right[0])
+        page_height = float(page.mediabox.upper_right[1])
+        signature_box = get_signature_box(coords, page_width, page_height, 0.2, 0.1)
+        return sigpage, signature_box, signature_img
+    else:
+        raise ValueError("Not found sign")

@@ -1,7 +1,10 @@
 import base64
 import hashlib
 import logging
+import datetime
 import requests
+from asn1crypto import cms, core, util
+from endesive import pdf
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +12,29 @@ OID_NIST_SHA1 = "1.3.14.3.2.26"
 OID_NIST_SHA256 = "2.16.840.1.101.3.4.2.1"
 OID_RSA_RSA = "1.2.840.113549.1.1.1"
 BASE_URL = "https://remotesigning.viettel.vn:8773"
+
+
+class Signer:
+    def __init__(self, cert, sig, tosign):
+        self.cert = cert
+        self.sig = sig
+        self.tosign = tosign
+        self.mech = None
+
+    def certificate(self):
+        return 1, self.cert
+
+    def sign(self, keyid, data, mech):
+        if self.tosign:
+            assert self.tosign == data
+        self.tosign = data
+        self.mech = mech
+        if self.sig is None:
+            sig = None
+            if mech == "sha256":
+                sig = b"\0" * 256
+            return sig
+        return self.sig
 
 
 class MySignHelper:
@@ -154,6 +180,141 @@ class MySignHelper:
     def generate_base64_sha256(file_data):
         sha256_hash = hashlib.sha256(file_data).digest()
         base64_hash = base64.b64encode(sha256_hash).decode("utf-8")
-        print("base64_hash", base64_hash)
-        print("base64_hash Len", len(base64_hash))
         return base64_hash
+
+    @staticmethod
+    def generate_attrs(signed_value, signed_time):
+        return [
+            cms.CMSAttribute(
+                {"type": cms.CMSAttributeType("content_type"), "values": ("data",)}
+            ),
+            cms.CMSAttribute(
+                {
+                    "type": cms.CMSAttributeType("message_digest"),
+                    "values": (signed_value,),
+                }
+            ),
+            cms.CMSAttribute(
+                {
+                    "type": cms.CMSAttributeType("signing_time"),
+                    "values": (cms.Time({"utc_time": core.UTCTime(signed_time)}),),
+                }
+            ),
+        ]
+
+    @staticmethod
+    def get_signing_time():
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        signing_date_str = now.strftime("%Y%m%d%H%M%S+00'00'")
+        signing_time = datetime.datetime(
+            now.year, now.month, now.day, now.hour, now.minute, now.second, 0, timezone.utc
+        )
+        return signing_date_str, signing_time
+
+    @staticmethod
+    def generate_dtbs(file_data, sigpage, signature_box, signature_img, cert, signer, id, new_id):
+        def attrs(signed_value):
+            result = [
+                cms.CMSAttribute(
+                    {"type": cms.CMSAttributeType("content_type"), "values": ("data",)}
+                ),
+                cms.CMSAttribute(
+                    {
+                        "type": cms.CMSAttributeType("message_digest"),
+                        "values": (signed_value,),
+                    }
+                ),
+                cms.CMSAttribute(
+                    {
+                        "type": cms.CMSAttributeType("signing_time"),
+                        "values": (cms.Time({"utc_time": core.UTCTime(signed_time)}),),
+                    }
+                ),
+            ]
+            return result
+
+        dct = {
+            "aligned": 16384,
+            "sigflags": 3,
+            "sigflagsft": 132,
+            "sigpage": sigpage,
+            "auto_sigfield": True,
+            "contact": f"{signer.email}",
+            "location": "Đà Nẵng",
+            "reason": f"{signer.name}<{signer.email}> đã ký lên văn bản này!",
+            "application": "DMT Office",
+            "signature_img": signature_img,
+            "signaturebox": signature_box,
+            "newid": str(new_id),
+            "id": str(id).encode(),
+            "attrs": attrs
+        }
+        when = datetime.datetime.now(tz=datetime.timezone.utc)
+        signing_date = when.strftime("%Y%m%d%H%M%S+00'00'")
+        dct["signingdate"] = signing_date.encode()
+        signed_time = datetime.datetime(
+            when.year, when.month, when.day, when.hour, when.minute, when.second, 0, util.timezone.utc
+        )
+        cert = cert.encode('ascii')
+
+        clshsm = Signer(cert, None, None)
+        cls = pdf.cms.SignedData()
+        cls.sign(file_data, dct, None, None, [], "sha256", clshsm, mode="sign")
+
+        tosign = b"".join(base64.encodebytes(clshsm.tosign).split()).decode('ascii')
+        b64decoded_tosign = base64.b64decode(tosign)
+        hashed_tosign = hashlib.sha256(b64decoded_tosign).digest()
+        dtbs = base64.b64encode(hashed_tosign).decode("utf-8")
+        dct.pop("attrs")
+        return dtbs, tosign, dct
+
+    @staticmethod
+    def generate_signed_pdf(signature_data, pdf_data):
+        def attrs(signed_value):
+            result = [
+                cms.CMSAttribute(
+                    {"type": cms.CMSAttributeType("content_type"), "values": ("data",)}
+                ),
+                cms.CMSAttribute(
+                    {
+                        "type": cms.CMSAttributeType("message_digest"),
+                        "values": (signed_value,),
+                    }
+                ),
+                cms.CMSAttribute(
+                    {
+                        "type": cms.CMSAttributeType("signing_time"),
+                        "values": (cms.Time({"utc_time": core.UTCTime(signed_time)}),),
+                    }
+                ),
+            ]
+            return result
+        dct = signature_data["dct"]
+        signingdate_str = dct["signingdate"].decode()
+        signed_time = datetime.datetime.strptime(signingdate_str, "%Y%m%d%H%M%S+00'00'")
+        signed_time = signed_time.replace(tzinfo=datetime.timezone.utc)
+        dct["attrs"] = attrs
+        cert = signature_data["certificate"].encode("ascii")
+        signed_bytes = signature_data["signed_bytes"]
+        if signed_bytes is not None:
+            signed_bytes = base64.decodebytes(signed_bytes.encode("ascii"))
+        tosign = signature_data["tosign"]
+        if tosign is not None:
+            tosign = base64.decodebytes(tosign.encode("ascii"))
+
+        clshsm = Signer(cert, signed_bytes, tosign)
+
+        datas = pdf.cms.SignedData().sign(pdf_data, dct, None, None, [], "sha256", clshsm, mode="sign")
+        return pdf_data + datas
+
+    @staticmethod
+    def generate_pem_file_content(input_data):
+        lines = input_data.strip().split("\n")
+        base64_cert_data = "\n".join(lines)
+
+        pem_content = (
+            "-----BEGIN CERTIFICATE-----\n"
+            f"{base64_cert_data}\n"
+            "-----END CERTIFICATE-----\n"
+        )
+        return pem_content

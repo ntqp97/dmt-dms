@@ -1,9 +1,17 @@
+import logging
+import tempfile
+
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError, PartialCredentialsError
 import io
+from django.conf import settings
+from PIL import Image
+import requests
+logger = logging.getLogger(__name__)
 
 
 class S3FileManager:
+
     @staticmethod
     def s3_connection(aws_access_key_id, aws_secret_access_key, region_name):
         try:
@@ -15,6 +23,7 @@ class S3FileManager:
             )
             return s3
         except ClientError as e:
+            logger.error(e)
             return None
 
     @staticmethod
@@ -27,18 +36,21 @@ class S3FileManager:
                 s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration=location)
             return True
         except ClientError as e:
-            print(e)
+            logger.error(e)
             return False
 
     @staticmethod
-    def upload_file_to_s3(local_file_path: str, bucket_name: str, s3_object_name: str, s3_client):
+    def upload_file_to_s3(data, bucket_name, s3_object_name, s3_client, is_object=False):
         try:
             # Upload the file
-            s3_client.upload_file(local_file_path, bucket_name, s3_object_name)
+            if is_object:
+                s3_client.upload_fileobj(io.BytesIO(data), bucket_name, s3_object_name)
+            else:
+                s3_client.upload_file(data, bucket_name, s3_object_name)
             print(f"File uploaded successfully to {bucket_name}/{s3_object_name}")
             return True
         except NoCredentialsError:
-            print("Credentials not available")
+            logger.error("Credentials not available")
             return False
 
     @staticmethod
@@ -46,17 +58,17 @@ class S3FileManager:
         try:
             # Head object to check if the file exists
             s3_client.head_object(Bucket=bucket_name, Key=s3_file_key)
-            print(f"File '{s3_file_key}' exists in bucket '{bucket_name}'")
+            logger.info(f"File '{s3_file_key}' exists in bucket '{bucket_name}'")
             return True
         except ClientError as e:
             if e.response['Error']['Code'] == '404':
-                print(f"File '{s3_file_key}' does not exist in bucket '{bucket_name}'")
+                logger.error(f"File '{s3_file_key}' does not exist in bucket '{bucket_name}'")
                 return False
             else:
-                print(f"Error checking file existence: {e}")
+                logger.error(f"Error checking file existence: {e}")
                 return False
         except (NoCredentialsError, PartialCredentialsError):
-            print("Credentials not available")
+            logger.error("Credentials not available")
             return False
 
     @staticmethod
@@ -65,10 +77,10 @@ class S3FileManager:
         try:
             # Delete the file
             s3_client.delete_object(Bucket=bucket_name, Key=file_key)
-            print(f"File '{file_key}' deleted successfully from bucket '{bucket_name}'")
+            logger.info(f"File '{file_key}' deleted successfully from bucket '{bucket_name}'")
             return True
         except NoCredentialsError:
-            print("Credentials not available")
+            logger.error("Credentials not available")
             return False
 
     @staticmethod
@@ -81,7 +93,7 @@ class S3FileManager:
             )
             return response
         except ClientError as e:
-            print(e)
+            logger.error(e)
             return None
 
     @staticmethod
@@ -89,10 +101,10 @@ class S3FileManager:
         try:
             # Download the file from S3
             s3_client.download_file(bucket_name, file_key, local_path)
-            print(f"File downloaded successfully: {local_path}")
+            logger.info(f"File downloaded successfully: {local_path}")
             return True
         except NoCredentialsError:
-            print("Credentials not available")
+            logger.error("Credentials not available")
             return False
 
     @staticmethod
@@ -101,6 +113,25 @@ class S3FileManager:
         try:
             s3_client.download_fileobj(bucket_name, file_key, input_pdf)
             input_pdf.seek(0)
+            logger.info("File downloaded successfully")
             return input_pdf
         except Exception as e:
             raise Exception(f"Error downloading file from S3: {str(e)}")
+
+    @staticmethod
+    def download_pdf_from_s3(bucket_name, file_key, s3_client):
+        try:
+            temp_file = tempfile.NamedTemporaryFile(delete=False)
+            s3_client.download_file(bucket_name, file_key, temp_file.name)
+            temp_file.close()
+
+            return temp_file.name
+        except Exception as e:
+            raise Exception(f"Error downloading file from S3: {str(e)}")
+
+    @staticmethod
+    def download_image_from_s3(s3_url):
+        response = requests.get(s3_url)
+        response.raise_for_status()
+        image_data = io.BytesIO(response.content)
+        return Image.open(image_data)

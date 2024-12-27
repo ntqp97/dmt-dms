@@ -80,3 +80,16 @@ class Asset(SoftDeleteModel, BaseModel):
             s3_client=s3_client
         )
         return asset_file
+
+    def download_asset_file(self, access_key, secret_key, region_name, bucket_name):
+        s3_client = S3FileManager.s3_connection(
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region_name
+        )
+        file_path = S3FileManager.download_pdf_from_s3(
+            bucket_name=bucket_name,
+            file_key=self.file.name,
+            s3_client=s3_client
+        )
+        return file_path

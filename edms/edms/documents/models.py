@@ -2,12 +2,16 @@ from django.db import models, transaction
 from django.utils.timezone import now
 
 from edms.assets.models import Asset
+from edms.common import pdf_helper
 from edms.common.basemodels import BaseModel
+from edms.common.s3_helper import S3FileManager
 from edms.core.models import SoftDeleteModel
 from edms.documents.signing_utils import MySignHelper
 from edms.notifications.services import NotificationService
 from edms.users.models import User
 import mimetypes
+from django.core.cache import cache
+import copy
 
 
 # Create your models here.
@@ -224,7 +228,7 @@ class Document(SoftDeleteModel, BaseModel):
             )
         document_signature = self.signatures.filter(signer=request.user).first()
 
-        if document_signature in [DocumentSignature.SIGNED, DocumentSignature.PENDING, DocumentSignature.REJECTED]:
+        if document_signature.signature_status in [DocumentSignature.SIGNED, DocumentSignature.PENDING, DocumentSignature.REJECTED]:
             raise ValueError("You have SIGNED/PENDING/REJECTED the signing.")
 
         previous_signatures = self.signatures.filter(
@@ -252,20 +256,36 @@ class Document(SoftDeleteModel, BaseModel):
             )
 
             if cert_list:
-                signature_file_bytes = signature_file.get_asset_file(
+                signature_file_input = signature_file.get_asset_file(
                     access_key=access_key,
                     secret_key=secret_key,
                     region_name=region_name,
                     bucket_name=bucket_name
-                ).read()
+                )
 
-                # coordinates_dict = pdf_helper.get_signature_field_coordinates(
-                #     pages=None,
-                #     input_pdf=signature_file_bytes
-                # )
-                # num_signatures = len(coordinates_dict.get(document_signature.order, []))
+                origin_file_input = copy.deepcopy(signature_file_input)
 
-                hash_list = [MySignHelper.generate_base64_sha256(signature_file_bytes)]
+                sigpage, signature_box, signature_img = pdf_helper.get_positions_signature(
+                    input_pdf=signature_file_input,
+                    document_signature=document_signature
+                )
+
+                cert = MySignHelper.generate_pem_file_content(cert_list[list(cert_list.keys())[0]]['certificates'][0])
+
+                signature_img = S3FileManager.download_image_from_s3(signature_img)
+
+                dtbs, tosign, dct = MySignHelper.generate_dtbs(
+                    file_data=origin_file_input.read(),
+                    sigpage=sigpage,
+                    signature_box=signature_box,
+                    signature_img=signature_img,
+                    cert=cert,
+                    signer=document_signature.signer,
+                    id=self.document_code,
+                    new_id=document_signature.id,
+                )
+
+                hash_list = [dtbs]
 
                 sign_hash_response = MySignHelper.sign_hash(
                     hash_list=hash_list,
@@ -287,6 +307,16 @@ class Document(SoftDeleteModel, BaseModel):
                         signature_status=DocumentSignature.PENDING,
                         updated_by=request.user,
                     )
+
+                    cache_key = f"signature:{self.document_code}:{document_signature.id}"
+                    cache_data = {
+                        "tosign": tosign,
+                        "dtbs": dtbs,
+                        "certificate": cert,
+                        "dct": dct
+                    }
+                    cache.set(cache_key, cache_data, timeout=3600)
+
                 except Exception as e:
                     raise ValueError(f"Failed to update document state: {e}")
                 return sign_hash_response
