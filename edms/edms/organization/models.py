@@ -22,6 +22,25 @@ class OrganizationUnit(BaseModel):
     def get_children(self):
         return OrganizationUnit.objects.filter(parent=self)
 
+    def get_ancestor(self, levels_up=1):
+        """Returns ancestor."""
+        ancestor = self
+        for _ in range(levels_up):
+            if ancestor.parent:
+                ancestor = ancestor.parent
+            else:
+                return None
+        return ancestor
+
+    def get_all_ancestors(self):
+        """Returns list all ancestors."""
+        ancestors = []
+        ancestor = self.parent
+        while ancestor:
+            ancestors.append(ancestor)
+            ancestor = ancestor.parent
+        return ancestors
+
     def as_tree(self):
         """Returns the unit and its children as a tree."""
         return {

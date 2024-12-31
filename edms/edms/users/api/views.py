@@ -21,7 +21,9 @@ from .serializers import (
     UserLoginSerializer,
     UpdateUserSignatureSerializer,
     UserRegisterSerializer,
-    UserSerializer
+    UserSerializer,
+    UserChangePasswordSerializer,
+    LogoutSerializer,
 )
 from ...search.filters import UnaccentSearchFilter
 
@@ -38,10 +40,10 @@ class UserViewSet(  # viewsets.ModelViewSet):
         "register": UserRegisterSerializer,
         "login": UserLoginSerializer,
         "update_signature": UpdateUserSignatureSerializer,
-        # "logout": LogoutSerializer,
+        "logout": LogoutSerializer,
         # "resend_email": ResendEmailSerializer,
         # "forgot_password": ForgotPasswordSerializer,
-        # "set_new_password": UserSetPasswordSerializer,
+        "change_password": UserChangePasswordSerializer,
     }
     default_serializer_class = UserSerializer
     pagination_class = StandardResultsSetPagination
@@ -148,6 +150,48 @@ class UserViewSet(  # viewsets.ModelViewSet):
                 custom_error("USER", serializer.errors),
             ).failure_response()
         return response
+
+    @action(
+        methods=["post"],
+        detail=False,
+        permission_classes=[IsAuthenticated, ],
+        url_path="logout"
+    )
+    def logout(self, request):
+        serializer = self.get_serializer_class()(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            response = Response(status=status.HTTP_204_NO_CONTENT)
+        else:
+            response = ErrorResponse(
+                custom_error("USER", serializer.errors)
+            ).failure_response(),
+
+        return response
+
+    @action(
+        methods=["post"],
+        detail=False,
+        permission_classes=[IsAuthenticated, ],
+        url_path="change-password"
+    )
+    def change_password(self, request):
+        serializer = UserChangePasswordSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            user = request.user
+            user.set_password(serializer.validated_data['new_password'])
+            user.save()
+
+            data = AppResponse.CHANGE_PASSWORD.success_response
+            return Response(data, status=AppResponse.CHANGE_PASSWORD.status_code)
+        response = ErrorResponse(
+            custom_error("USER", serializer.errors)
+        ).failure_response()
+        return response
+
 
     @action(
         detail=False,

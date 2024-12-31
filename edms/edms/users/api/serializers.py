@@ -2,9 +2,12 @@ from django.contrib.auth import authenticate
 from django.core.validators import validate_email
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from edms.assets.models import Asset
 from edms.assets.serializers import AssetSerializer
+from edms.common.app_status import ErrorResponse
 from edms.common.upload_helper import validate_file_type
 from edms.organization.models import OrganizationUnit
 from edms.users.models import User, UserSignature
@@ -66,6 +69,8 @@ class UserSerializer(serializers.ModelSerializer[User]):
         many=True,
     )
 
+    organization_unit = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -80,13 +85,19 @@ class UserSerializer(serializers.ModelSerializer[User]):
             "external_user_id",
             "citizen_identification",
             "signature_images",
-            "role"
+            "role",
+            "birthdate",
+            "avatar",
             # "url",
         ]
 
         # extra_kwargs = {
         #     "url": {"view_name": "user-detail", "lookup_field": "pk"},
         # }
+
+    def get_organization_unit(self, obj):
+        from edms.organization.serializers import OrganizationUnitSerializer
+        return OrganizationUnitSerializer(obj.organization_unit).data
 
     def to_representation(self, instance):
         request = self.context.get('request', None)
@@ -97,12 +108,16 @@ class UserSerializer(serializers.ModelSerializer[User]):
             many=True,
             context=self.context
         ).data
+        if instance.organization_unit:
+            data["department"] = OrganizationUnit.objects.get(id=instance.organization_unit.id).name
         return data
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
         required=False,
+        max_length=100,
+        min_length=6,
         write_only=True,
         allow_blank=False,
         allow_null=True,
@@ -184,6 +199,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             "gender",
             "external_user_id",
             "citizen_identification",
+            "birthdate",
+            "avatar",
         ]
 
     def validate(self, data):
@@ -242,3 +259,69 @@ class UserLoginSerializer(serializers.Serializer):
         if user is None:
             raise AuthenticationFailed("Invalid email/password or Inactive Account.")
         return user
+
+
+class UserChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(
+        required=True,
+        min_length=6,
+        max_length=100,
+        error_messages={
+            "blank": "empty",
+            "required": "required",
+            "max_length": "max_length",
+            "min_length": "min_length"
+        }
+    )
+    new_password = serializers.CharField(
+        required=True,
+        min_length=6,
+        max_length=100,
+        error_messages={
+            "blank": "empty",
+            "required": "required",
+            "max_length": "max_length",
+            "min_length": "min_length"
+        }
+    )
+    new_password_confirm = serializers.CharField(
+        required=True,
+        min_length=6,
+        max_length=100,
+        error_messages={
+            "blank": "empty",
+            "required": "required",
+            "max_length": "max_length",
+            "min_length": "min_length",
+        }
+    )
+
+    def validate(self, data):
+        user = self.context['request'].user
+        if not user.check_password(data['current_password']):
+            raise serializers.ValidationError({"current_password": "The current password is incorrect"})
+        if data["new_password"] == data["current_password"]:
+            raise serializers.ValidationError(
+                {"new_password": "The new password cannot be the same as the current password."}
+            )
+        if data["new_password"] != data["new_password_confirm"]:
+            raise serializers.ValidationError({"new_password_confirm": "The new password confirmation does not match."})
+        return data
+
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField(required=True, error_messages={
+        "blank": "empty",
+        "required": "required",
+    }, )
+
+    def validate(self, data):
+        self.token = data["refresh"]
+        return data
+
+    def save(self, **kwargs):
+        try:
+            RefreshToken(self.token).blacklist()
+        except TokenError:
+            raise serializers.ValidationError(ErrorResponse(["USER__TOKEN__EXPIRED_OR_INVALID"]).failure_response())
+

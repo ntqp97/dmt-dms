@@ -233,11 +233,11 @@ class DocumentSerializer(serializers.ModelSerializer):
 
         # Validate file types
         for file in attachment_files:
-            allowed_extensions = ["pdf", "doc", "docx"]
+            allowed_extensions = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx"]
             validate_file_type(file, allowed_extensions)
 
         for file in appendix_files:
-            allowed_extensions = ["pdf", "doc", "docx"]
+            allowed_extensions = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx"]
             validate_file_type(file, allowed_extensions)
 
         for file in signature_files:

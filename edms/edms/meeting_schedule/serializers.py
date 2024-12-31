@@ -1,13 +1,9 @@
 import logging
-import os
-import uuid
-
-from django.utils import timezone
 from rest_framework import serializers
 
 from edms.assets.models import Asset
 from edms.assets.serializers import AssetSerializer
-from edms.common.datetime_utils import timestamp_to_datetime_ms, datetime_to_timestamp_ms
+from edms.common.custom_fields import TimestampToDatetimeField
 from edms.common.upload_helper import validate_file_type
 from edms.meeting_schedule.models import MeetingSchedule
 from edms.notifications.services import NotificationService
@@ -49,35 +45,6 @@ class ReviewMeetingScheduleSerializer(serializers.Serializer):
                 }
             )
         return instance
-
-
-class TimestampToDatetimeField(serializers.Field):
-    """
-    Custom serializer field to convert timestamp (in milliseconds) to datetime and vice versa.
-    """
-
-    def to_representation(self, value):
-        """
-        Converts datetime to timestamp (integer).
-        """
-        if value is None:
-            return None
-
-        return datetime_to_timestamp_ms(value)
-
-    def to_internal_value(self, data):
-        """
-        Converts timestamp (integer) to datetime.
-        """
-        try:
-            timestamp = int(data)
-        except ValueError:
-            raise serializers.ValidationError("Invalid timestamp value.")
-
-        if len(str(timestamp)) != 13:
-            raise serializers.ValidationError("Timestamp should be in milliseconds.")
-
-        return timestamp_to_datetime_ms(timestamp)
 
 
 class MeetingScheduleSerializer(serializers.ModelSerializer):

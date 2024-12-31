@@ -6,8 +6,13 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from ..common.basemodels import BaseModel
+from ..common.storage_backends import PublicMediaStorage
 from ..organization.models import OrganizationUnit
 from .managers import UserManager
+
+
+def get_path_user_avatar(instance, filename):
+    return f"user/avatar/{filename}"
 
 
 class User(AbstractUser):
@@ -43,6 +48,14 @@ class User(AbstractUser):
         through_fields=("user", "signature_image"),
         related_name="user_signatures"
     )
+    avatar = models.FileField(
+        upload_to=get_path_user_avatar,
+        storage=PublicMediaStorage(),
+        blank=True,
+        null=True,
+        default=None
+    )
+    birthdate = models.DateField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
