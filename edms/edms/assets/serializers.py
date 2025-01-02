@@ -6,11 +6,12 @@ from edms.documents.models import Document
 
 class AssetSerializer(serializers.ModelSerializer):
     preview_file_url = serializers.SerializerMethodField()
+    file_url_type = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
-        fields = ["id", "size", "mime_type", "asset_name", "file_type", "preview_file_url"]
-        read_only_fields = ["id", "size", "mime_type", "asset_name", "preview_file_url"]
+        fields = ["id", "size", "mime_type", "asset_name", "file_type", "preview_file_url", "file_url_type"]
+        read_only_fields = ["id", "size", "mime_type", "asset_name", "preview_file_url", "file_url_type"]
 
     def get_preview_file_url(self, obj):
         request = self.context.get('request')
@@ -21,3 +22,10 @@ class AssetSerializer(serializers.ModelSerializer):
         if obj.file and obj.mime_type == "application/pdf":
             return f"{scheme}://{host}/api/v1/assets/{obj.id}/preview-pdf/"
         return obj.file.url
+
+    def get_file_url_type(self, obj):
+        if obj.document and obj.document.document_category in [Document.COMPLETED_SIGNING_DOCUMENT]:
+            return "s3"
+        if obj.file and obj.mime_type == "application/pdf":
+            return "preview"
+        return "s3"
