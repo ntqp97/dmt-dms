@@ -7,6 +7,8 @@ from django.utils.translation import gettext_lazy as _
 from .forms import UserAdminChangeForm
 from .forms import UserAdminCreationForm
 from .models import User
+from django.contrib.admin.models import LogEntry
+
 
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
     # Force the `admin` sign in process to go through the `django-allauth` workflow:
@@ -48,3 +50,15 @@ class UserAdmin(auth_admin.UserAdmin):
             },
         ),
     )
+
+
+@admin.register(LogEntry)
+class LogEntryAdmin(admin.ModelAdmin):
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request):
+        return False

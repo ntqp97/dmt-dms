@@ -1,4 +1,5 @@
 import django_filters
+from django.db.models import Q
 from .models import Document, DocumentReceiver, DocumentSignature
 from ..search.filters import UnaccentFilter
 
@@ -24,7 +25,7 @@ class DocumentFilter(django_filters.FilterSet):
     document_form = django_filters.CharFilter(lookup_expr='exact')
     processing_status = django_filters.CharFilter(lookup_expr='exact')
     document_number_reference_code = UnaccentFilter(field_name='document_number_reference_code')
-    document_category = django_filters.CharFilter(lookup_expr='exact')
+    document_category = django_filters.CharFilter(method="comma_separate_filter")
     documents_statistics = django_filters.ChoiceFilter(
         choices=DOCUMENT_CLASSIFICATION_CHOICES, method='filter_by_classification'
     )
@@ -46,9 +47,16 @@ class DocumentFilter(django_filters.FilterSet):
             'document_number_reference_code',
             'created_at',
             'documents_statistics',
+            'document_category'
             # 'document_processing_deadline_at',
             # 'receivers',
         ]
+
+    def comma_separate_filter(self, queryset, name, value):
+        query = Q()
+        for document_category in value.split(","):
+            query |= Q(document_category__contains=document_category)
+        return queryset.filter(query)
 
     def filter_by_classification(self, queryset, name, value):
         user = self.request.user
