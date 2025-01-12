@@ -146,15 +146,31 @@ class DocumentViewSet(viewsets.ModelViewSet):
     )
     def statistics(self, request):
         user = request.user
-        created_docs_count = Document.objects.filter(created_by=user).count()
+        created_docs_count = Document.objects.filter(
+            created_by=user,
+            document_category__in=[
+                Document.NORMAL_DOCUMENT,
+                Document.COMPLETED_SIGNING_DOCUMENT,
+            ]
+        ).count()
         received_docs_count = (
-            Document.objects.filter(document_receivers__receiver=user)
+            Document.objects.filter(
+                document_receivers__receiver=user,
+                document_category__in=[
+                    Document.NORMAL_DOCUMENT,
+                    Document.COMPLETED_SIGNING_DOCUMENT,
+                ]
+            )
             .distinct()
             .count()
         )
         forwarded_docs_count = (
             Document.objects.filter(
                 document_receivers__created_by=user,
+                document_category__in=[
+                    Document.NORMAL_DOCUMENT,
+                    Document.COMPLETED_SIGNING_DOCUMENT,
+                ]
             ).exclude(
                 document_receivers__receiver=user,
             ).distinct().count()
@@ -162,7 +178,11 @@ class DocumentViewSet(viewsets.ModelViewSet):
         unread_docs_count = (
             Document.objects.filter(
                 document_receivers__receiver=user,
-                document_receivers__is_read=False
+                document_receivers__is_read=False,
+                document_category__in=[
+                    Document.NORMAL_DOCUMENT,
+                    Document.COMPLETED_SIGNING_DOCUMENT,
+                ]
             ).distinct().count()
         )
         pending_signing_docs_count = (
