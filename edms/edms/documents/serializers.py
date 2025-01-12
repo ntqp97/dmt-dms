@@ -299,6 +299,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             body=f"Tài liệu '{document.document_title}' đã được gửi đến bạn.",
             image=None,
             data={
+                "urgency_status": document.urgency_status,
                 "document_id": str(document.id)
             }
         )

@@ -11,6 +11,8 @@ from edms.notifications.services import NotificationService
 from edms.users.models import User
 import mimetypes
 from django.core.cache import cache
+from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+import pickle
 import copy
 
 
@@ -131,6 +133,7 @@ class Document(SoftDeleteModel, BaseModel):
                 body=f"Tài liệu '{self.document_title}' đã được gửi đến bạn.",
                 image=None,
                 data={
+                    "urgency_status": self.urgency_status,
                     "document_id": str(self.id)
                 }
             )
@@ -165,6 +168,7 @@ class Document(SoftDeleteModel, BaseModel):
                 body=f"Tài liệu '{self.document_title}' đã được gửi đến bạn.",
                 image=None,
                 data={
+                    "urgency_status": self.urgency_status,
                     "document_id": str(self.id)
                 }
             )
@@ -215,6 +219,7 @@ class Document(SoftDeleteModel, BaseModel):
                 body=f"Tài liệu {self.document_title} cần được ký. Vui lòng kiểm tra và hoàn tất.",
                 image=None,
                 data={
+                    "urgency_status": self.urgency_status,
                     "document_id": str(self.id)
                 }
             )
@@ -270,22 +275,21 @@ class Document(SoftDeleteModel, BaseModel):
                     document_signature=document_signature
                 )
 
-                cert = MySignHelper.generate_pem_file_content(cert_list[list(cert_list.keys())[0]]['certificates'][0])
+                cert = MySignHelper.get_cert509(cert_list[list(cert_list.keys())[0]]['certificates'][0])
 
                 signature_img = S3FileManager.download_image_from_s3(signature_img)
 
-                dtbs, tosign, dct = MySignHelper.generate_dtbs(
-                    file_data=origin_file_input.read(),
+                prep_digest, psi, signed_attrs, output = MySignHelper.prepare_document(
+                    file_data=IncrementalPdfFileWriter(origin_file_input),
+                    sig_name=f"Signature{document_signature.order}",
                     sigpage=sigpage,
                     signature_box=signature_box,
                     signature_img=signature_img,
                     cert=cert,
                     signer=document_signature.signer,
-                    id=self.document_code,
-                    new_id=document_signature.id,
                 )
 
-                hash_list = [dtbs]
+                hash_list = [MySignHelper.generate_base64_sha256(signed_attrs.dump())]
 
                 sign_hash_response = MySignHelper.sign_hash(
                     hash_list=hash_list,
@@ -310,12 +314,13 @@ class Document(SoftDeleteModel, BaseModel):
 
                     cache_key = f"signature:{self.document_code}:{document_signature.id}"
                     cache_data = {
-                        "tosign": tosign,
-                        "dtbs": dtbs,
-                        "certificate": cert,
-                        "dct": dct
+                        'prep_digest': prep_digest,
+                        'signed_attrs': signed_attrs.dump(),
+                        'psi': psi,
+                        'output_handle': output.getbuffer().tobytes(),
+                        'cert': cert_list[list(cert_list.keys())[0]]['certificates'][0]
                     }
-                    cache.set(cache_key, cache_data, timeout=3600)
+                    cache.set(cache_key, pickle.dumps(cache_data), timeout=3600)
 
                 except Exception as e:
                     raise ValueError(f"Failed to update document state: {e}")

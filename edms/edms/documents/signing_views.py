@@ -81,18 +81,10 @@ class WebhookMySignAPIView(APIView):
 
             if signature_data and signature_file:
                 signed_bytes = sign_status_response.get("signatures")[0]
-                signature_data['signed_bytes'] = signed_bytes
 
-                signature_file_input = signature_file.get_asset_file(
-                    access_key=settings.AWS_ACCESS_KEY_ID,
-                    secret_key=settings.AWS_SECRET_ACCESS_KEY,
-                    region_name=settings.AWS_S3_REGION_NAME,
-                    bucket_name=settings.AWS_STORAGE_BUCKET_NAME
-                ).read()
-
-                signed_pdf_data = MySignHelper.generate_signed_pdf(signature_data, signature_file_input)
+                signed_pdf_data = MySignHelper.insert_signature_into_pdf(signature_data, signed_bytes)
                 S3FileManager.upload_file_to_s3(
-                    data=signed_pdf_data,
+                    data=signed_pdf_data.read(),
                     bucket_name=settings.AWS_STORAGE_BUCKET_NAME,
                     s3_object_name=signature_file.file.name,
                     s3_client=S3FileManager.s3_connection(
@@ -119,6 +111,7 @@ class WebhookMySignAPIView(APIView):
                     body=f"Tài liệu {document_signature.document.document_title} cần được ký. Vui lòng kiểm tra và hoàn tất.",
                     image=None,
                     data={
+                        "urgency_status": document_signature.document.urgency_status,
                         "document_id": str(document_signature.document.id)
                     }
                 )
@@ -134,6 +127,7 @@ class WebhookMySignAPIView(APIView):
                     body=f"Tài liệu {document_signature.document.document_title} đã trình ký thành công.",
                     image=None,
                     data={
+                        "urgency_status": document_signature.document.urgency_status,
                         "document_id": str(document_signature.document.id)
                     }
                 )

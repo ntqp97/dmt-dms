@@ -2,16 +2,24 @@ import base64
 import hashlib
 import logging
 import datetime
-import requests
-from asn1crypto import cms, core, util
-from endesive import pdf
+import pickle
+from io import BytesIO
 
+import requests
+from asn1crypto import cms, core, util, x509, algos
+from endesive import pdf
+from pyhanko.pdf_utils import images
+from pyhanko.sign.fields import SigSeedSubFilter
+from pyhanko import stamp
+import asyncio
+from pyhanko.sign import signers, fields
 logger = logging.getLogger(__name__)
 
 OID_NIST_SHA1 = "1.3.14.3.2.26"
 OID_NIST_SHA256 = "2.16.840.1.101.3.4.2.1"
 OID_RSA_RSA = "1.2.840.113549.1.1.1"
 BASE_URL = "https://remotesigning.viettel.vn:8773"
+BYTES_RESERVED = 16384
 
 
 class Signer:
@@ -177,6 +185,12 @@ class MySignHelper:
         return encoded_name
 
     @staticmethod
+    def get_cert509(base64_certificate: str):
+        decoded_certificate = base64.b64decode(base64_certificate)
+        cert = x509.Certificate.load(decoded_certificate)
+        return cert
+
+    @staticmethod
     def generate_base64_sha256(file_data):
         sha256_hash = hashlib.sha256(file_data).digest()
         base64_hash = base64.b64encode(sha256_hash).decode("utf-8")
@@ -318,3 +332,71 @@ class MySignHelper:
             "-----END CERTIFICATE-----\n"
         )
         return pem_content
+
+    @staticmethod
+    def instantiate_external_signer(signature_value, cert):
+        return signers.ExternalSigner(
+            signing_cert=cert,
+            cert_registry=None,
+            signature_value=signature_value,
+            signature_mechanism=algos.SignedDigestAlgorithm({"algorithm": "sha256_rsa"}),
+        )
+
+    @staticmethod
+    def prepare_document(file_data, sig_name, sigpage, signature_box, signature_img, cert, signer):
+        ext_signer = MySignHelper.instantiate_external_signer(bytes(256), cert)
+        pdf_signer = signers.PdfSigner(
+            signature_meta=signers.PdfSignatureMetadata(
+                field_name=sig_name,
+                md_algorithm="sha256",
+                location="Đà Nẵng",
+                reason=f"{signer.name}<{signer.email}> đã ký lên văn bản này!",
+                contact_info=f"{signer.email}",
+                subfilter=SigSeedSubFilter.PADES
+            ),
+            new_field_spec=fields.SigFieldSpec(
+                sig_field_name=sig_name,
+                on_page=sigpage,
+                box=signature_box,
+            ),
+            stamp_style=stamp.TextStampStyle(
+                background=images.PdfImage(signature_img),
+                stamp_text="",
+                background_opacity=1,
+                border_width=0
+            ),
+            signer=ext_signer,
+        )
+        prep_digest, tbs_document, output = asyncio.run(pdf_signer.async_digest_doc_for_signing(
+            pdf_out=file_data,
+            bytes_reserved=BYTES_RESERVED
+        ))
+        psi = tbs_document.post_sign_instructions
+        signed_attrs = asyncio.run(ext_signer.signed_attrs(
+            data_digest=prep_digest.document_digest,
+            digest_algorithm='sha256',
+            use_pades=True,
+        ))
+        return prep_digest, psi, signed_attrs, output
+
+    @staticmethod
+    def insert_signature_into_pdf(signature_data, signed_bytes):
+        signature_data = pickle.loads(signature_data)
+        prep_digest = signature_data['prep_digest']
+        signed_attrs = cms.CMSAttributes.load(signature_data['signed_attrs'])
+        psi = signature_data['psi']
+        output = BytesIO(signature_data['output_handle'])
+        cert = MySignHelper.get_cert509(signature_data['cert'])
+        signature = base64.b64decode(signed_bytes)
+        ext_signer = MySignHelper.instantiate_external_signer(signature, cert)
+        content_info = asyncio.run(ext_signer.async_sign_prescribed_attributes(
+            digest_algorithm="sha256",
+            signed_attrs=signed_attrs,
+        ))
+        asyncio.run(signers.pdf_signer.PdfTBSDocument.async_finish_signing(
+            output,
+            prep_digest,
+            content_info,
+            post_sign_instr=psi,
+        ))
+        return output
