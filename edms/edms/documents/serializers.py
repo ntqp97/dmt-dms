@@ -180,6 +180,9 @@ class DocumentSerializer(serializers.ModelSerializer):
             "attachment_documents",
             "document_category",
         ]
+        extra_kwargs = {
+            "document_type": {"required": False, "allow_null": True},
+        }
         read_only_fields = ["document_code", "document_category"]
 
     # def validate_file_type(self, file, allowed_extensions):
