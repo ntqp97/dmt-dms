@@ -32,7 +32,7 @@ class Document(SoftDeleteModel, BaseModel):
     document_code = models.CharField(max_length=50, unique=True)
     document_title = models.CharField(max_length=255)
     document_summary = models.TextField()
-    document_type = models.CharField(max_length=255)
+    document_type = models.CharField(max_length=255, blank=True, null=True)
     urgency_status = models.CharField(max_length=255)
     document_form = models.CharField(max_length=255)
     receivers = models.ManyToManyField(
