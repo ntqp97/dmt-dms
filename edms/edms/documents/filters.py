@@ -53,10 +53,9 @@ class DocumentFilter(django_filters.FilterSet):
         ]
 
     def comma_separate_filter(self, queryset, name, value):
-        query = Q()
-        for document_category in value.split(","):
-            query |= Q(document_category__contains=document_category)
-        return queryset.filter(query)
+        return queryset.filter(
+            Q(document_category__in=value.split(","))
+        )
 
     def filter_by_classification(self, queryset, name, value):
         user = self.request.user

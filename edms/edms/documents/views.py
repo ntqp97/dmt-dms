@@ -1,8 +1,6 @@
 import json
 
-from django.core.exceptions import ValidationError
 from django.db.models import Q
-from django.http import QueryDict
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
@@ -53,7 +51,11 @@ class DocumentViewSet(viewsets.ModelViewSet):
         #     queryset = Document.objects.all()
         # else:
         queryset = Document.objects.filter(
-            Q(created_by=user) | Q(receivers__in=[user]) | Q(signers__in=[user]),
+            Q(created_by=user) | Q(receivers__in=[user]) |
+            (
+                Q(signers__in=[user]) &
+                ~Q(document_category=Document.SIGNING_DOCUMENT)
+            )
         ).distinct()
         return queryset.order_by("-id")
 
