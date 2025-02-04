@@ -32,7 +32,6 @@ class MeetingScheduleViewSet(viewsets.ModelViewSet):
         "meeting_topic",
         "meeting_content",
     ]
-    http_method_names = ["get", "post"]
 
     def get_permissions(self):
         if self.action in ["destroy", "update", "partial_update"]:
@@ -65,6 +64,16 @@ class MeetingScheduleViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
 
+    def destroy(self, request, *args, **kwargs):
+        ms = self.get_object()
+        if ms.status != MeetingSchedule.PENDING_APPROVAL:
+            return Response(
+                AppResponse.DELETE_DOCUMENTS_FAILURE.failure_response,
+                status=AppResponse.DELETE_DOCUMENTS_FAILURE.status_code
+            )
+
+        return super().destroy(request, *args, **kwargs)
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(
             data=request.data,
@@ -80,6 +89,36 @@ class MeetingScheduleViewSet(viewsets.ModelViewSet):
             response = Response(
                 data,
                 status=AppResponse.CREATE_DOCUMENTS.status_code,
+            )
+        else:
+            response = ErrorResponse(
+                custom_error("MEETING_SCHEDULE", serializer.errors),
+            ).failure_response()
+        return response
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status != MeetingSchedule.PENDING_APPROVAL:
+            return Response(
+                AppResponse.UPDATE_MEETING_SCHEDULE_FAILURE.failure_response,
+                status=AppResponse.UPDATE_MEETING_SCHEDULE_FAILURE.status_code
+            )
+
+        serializer = self.get_serializer(
+            instance,
+            data=request.data,
+            context={
+                'request': request,
+            },
+            partial=True
+        )
+        if serializer.is_valid():
+            self.perform_update(serializer)
+            data = AppResponse.UPDATE_MEETING_SCHEDULE.success_response
+            data["results"] = serializer.data
+            response = Response(
+                data,
+                status=AppResponse.UPDATE_MEETING_SCHEDULE.status_code,
             )
         else:
             response = ErrorResponse(

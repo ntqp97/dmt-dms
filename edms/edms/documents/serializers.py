@@ -314,6 +314,7 @@ class DocumentSerializer(serializers.ModelSerializer):
         signature_files = validated_data.pop("signature_files", [])
         signers_flow = validated_data.pop("signers_flow", [])
         _ = validated_data.pop("receivers_ids", [])
+        _ = validated_data.pop("document_category", None)
         attachment_document_ids = validated_data.pop("attachment_document_ids", [])
         attachment_document_ids = list(map(int, attachment_document_ids.split(','))) if attachment_document_ids else []
 

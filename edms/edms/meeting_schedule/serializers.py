@@ -32,13 +32,39 @@ class ReviewMeetingScheduleSerializer(serializers.Serializer):
         instance.note = validated_data.get('note', instance.note)
         instance.updated_by = validated_data.get('updated_by', instance.updated_by)
         instance.save()
+
         if instance.status == MeetingSchedule.APPROVED:
             receivers = list(set([instance.user_contact, instance.user_host] + list(instance.participants.all())))
             NotificationService.send_notification_to_users(
                 sender=instance.updated_by,
                 receivers=receivers,
-                title="Lịch họp mới đã được đặt",
-                body=f"Lịch họp với topic '{instance.meeting_topic}' đã được đặt.",
+                title="Lịch họp đã được phê duyệt",
+                body=f"Lịch họp với topic '{instance.meeting_topic}' đã được phê duyệt.",
+                image=None,
+                data={
+                    "meeting_schedule_id": str(instance.id)
+                }
+            )
+        if instance.status == MeetingSchedule.CANCELLED:
+            receivers = list(set([instance.user_contact, instance.user_host] + list(instance.participants.all())))
+            NotificationService.send_notification_to_users(
+                sender=instance.updated_by,
+                receivers=receivers,
+                title="Lịch họp đã bị huỷ",
+                body=f"Lịch họp với topic '{instance.meeting_topic}' đã bị huỷ.",
+                image=None,
+                data={
+                    "meeting_schedule_id": str(instance.id)
+                }
+            )
+
+        if instance.status == MeetingSchedule.REJECTED:
+            receivers = [instance.created_by]
+            NotificationService.send_notification_to_users(
+                sender=instance.updated_by,
+                receivers=receivers,
+                title="Lịch họp của bạn không được phê duyệt",
+                body=f"Lịch họp với topic '{instance.meeting_topic}' không được phê duyệt.",
                 image=None,
                 data={
                     "meeting_schedule_id": str(instance.id)
@@ -114,15 +140,16 @@ class MeetingScheduleSerializer(serializers.ModelSerializer):
         except ValueError:
             raise serializers.ValidationError("participants_ids must be a comma-separated list of integers.")
 
-        try:
-            user_contact_id = int(user_contact_id)
-        except (TypeError, ValueError):
-            raise serializers.ValidationError("user_contact_id must be an integer.")
-
-        try:
-            user_host_id = int(user_host_id)
-        except (TypeError, ValueError):
-            raise serializers.ValidationError("user_host_id must be an integer.")
+        if user_contact_id:
+            try:
+                user_contact_id = int(user_contact_id)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError("user_contact_id must be an integer.")
+        if user_host_id:
+            try:
+                user_host_id = int(user_host_id)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError("user_host_id must be an integer.")
 
         for file in attachment_files:
             allowed_extensions = ["pdf", "doc", "docx"]
@@ -140,6 +167,23 @@ class MeetingScheduleSerializer(serializers.ModelSerializer):
         meeting_schedule.participants.set(participants_ids)
         meeting_schedule.associate_assets(attachment_files, Asset.ATTACHMENT)
         return meeting_schedule
+
+    def update(self, instance, validated_data):
+        attachment_files = validated_data.pop("attachment_files", [])
+        participants_ids = validated_data.pop("participants_ids", [])
+        user_contact_id = validated_data.pop("user_contact_id", None)
+        user_host_id = validated_data.pop("user_host_id", None)
+        _ = validated_data.pop("status", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.user_contact_id = user_contact_id if user_contact_id else instance.user_contact_id
+        instance.user_host_id = user_host_id if user_host_id else instance.user_host_id
+        instance.save()
+        if participants_ids:
+            instance.participants.set(participants_ids)
+        instance.associate_assets(attachment_files, Asset.ATTACHMENT)
+        return instance
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

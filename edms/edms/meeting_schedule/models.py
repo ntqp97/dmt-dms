@@ -2,11 +2,12 @@ from django.db import models
 
 from edms.assets.models import Asset
 from edms.common.basemodels import BaseModel
+from edms.core.models import SoftDeleteModel
 import mimetypes
 
 
 # Create your models here.
-class MeetingSchedule(BaseModel):
+class MeetingSchedule(SoftDeleteModel, BaseModel):
     PENDING_APPROVAL = "pending_approval"
     APPROVED = "approved"
     REJECTED = "rejected"

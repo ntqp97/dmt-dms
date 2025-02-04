@@ -63,7 +63,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
         document = self.get_object()
         if document.document_category != Document.SIGNING_DOCUMENT:
             return Response(
-                AppResponse.DELETE_DOCUMENTS_FAILURE.success_response,
+                AppResponse.DELETE_DOCUMENTS_FAILURE.failure_response,
                 status=AppResponse.DELETE_DOCUMENTS_FAILURE.status_code
             )
 
@@ -113,7 +113,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
         signers_list = self.process_signers(request.data.get("signers_flow"))
         if instance.document_category != Document.SIGNING_DOCUMENT:
             return Response(
-                AppResponse.UPDATE_DOCUMENTS_FAILURE.success_response,
+                AppResponse.UPDATE_DOCUMENTS_FAILURE.failure_response,
                 status=AppResponse.UPDATE_DOCUMENTS_FAILURE.status_code
             )
 
