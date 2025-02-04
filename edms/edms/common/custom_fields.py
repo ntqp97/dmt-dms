@@ -24,9 +24,9 @@ class TimestampToDatetimeField(serializers.Field):
         try:
             timestamp = int(data)
         except ValueError:
-            raise serializers.ValidationError("Invalid timestamp value.")
+            raise serializers.ValidationError({"detail": "Invalid timestamp value."})
 
         if len(str(timestamp)) != 13:
-            raise serializers.ValidationError("Timestamp should be in milliseconds.")
+            raise serializers.ValidationError({"detail": "Timestamp should be in milliseconds."})
 
         return timestamp_to_datetime_ms(timestamp)

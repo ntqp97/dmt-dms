@@ -1,3 +1,5 @@
+import logging
+
 from django.db import transaction
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -13,6 +15,7 @@ from ..assets.models import Asset
 from ..common.s3_helper import S3FileManager
 from ..notifications.services import NotificationService
 from django.core.cache import cache
+logger = logging.getLogger(__name__)
 
 
 class WebhookMySignAPIView(APIView):
@@ -24,10 +27,10 @@ class WebhookMySignAPIView(APIView):
             serializer = WebhookMySignRequestSerializer(data=request.data)
             if serializer.is_valid():
                 transaction_id = serializer.validated_data["transaction_id"]
-                print("transaction_id", transaction_id)
-                print("User", request.user)
+                logger.info("transaction_id", transaction_id)
+                logger.info("User", request.user)
                 document_signature = DocumentSignature.objects.get(transaction_id=transaction_id)
-                print("document_signature", document_signature.id)
+                logger.info("document_signature", document_signature.id)
                 if document_signature:
                     access_token = MySignHelper.login(
                         user_id=request.user.external_user_id,
@@ -48,7 +51,7 @@ class WebhookMySignAPIView(APIView):
                 else:
                     raise ValueError(f"No signer found for the transaction ID: {transaction_id}.")
         except Exception as e:
-            print(e)
+            logger.error(e)
             return ErrorResponse(
                 str(e),
             ).failure_response()

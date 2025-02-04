@@ -47,7 +47,7 @@ class S3FileManager:
                 s3_client.upload_fileobj(io.BytesIO(data), bucket_name, s3_object_name)
             else:
                 s3_client.upload_file(data, bucket_name, s3_object_name)
-            print(f"File uploaded successfully to {bucket_name}/{s3_object_name}")
+            logger.info(f"File uploaded successfully to {bucket_name}/{s3_object_name}")
             return True
         except NoCredentialsError:
             logger.error("Credentials not available")

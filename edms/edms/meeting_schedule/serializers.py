@@ -9,7 +9,7 @@ from edms.meeting_schedule.models import MeetingSchedule
 from edms.notifications.services import NotificationService
 from edms.users.api.serializers import UserSerializer
 
-myapp_logger = logging.getLogger("django")
+logger = logging.getLogger(__name__)
 
 
 class BaseMeetingScheduleSerializer(serializers.ModelSerializer):
@@ -28,7 +28,12 @@ class ReviewMeetingScheduleSerializer(serializers.Serializer):
     note = serializers.CharField(required=False)
 
     def update(self, instance, validated_data):
-        instance.status = validated_data.get('status', instance.status)
+        user = self.context["request"].user
+        try:
+            instance.update_status(validated_data.get('status', instance.status), user)
+        except Exception as e:
+            logger.error(str(e))
+            raise serializers.ValidationError({"detail": str(e)})
         instance.note = validated_data.get('note', instance.note)
         instance.updated_by = validated_data.get('updated_by', instance.updated_by)
         instance.save()
@@ -138,18 +143,18 @@ class MeetingScheduleSerializer(serializers.ModelSerializer):
         try:
             participants_ids = list(map(int, participants_ids.split(','))) if participants_ids else []
         except ValueError:
-            raise serializers.ValidationError("participants_ids must be a comma-separated list of integers.")
+            raise serializers.ValidationError({"detail": "participants_ids must be a comma-separated list of integers."})
 
         if user_contact_id:
             try:
                 user_contact_id = int(user_contact_id)
             except (TypeError, ValueError):
-                raise serializers.ValidationError("user_contact_id must be an integer.")
+                raise serializers.ValidationError({"detail": "user_contact_id must be an integer."})
         if user_host_id:
             try:
                 user_host_id = int(user_host_id)
             except (TypeError, ValueError):
-                raise serializers.ValidationError("user_host_id must be an integer.")
+                raise serializers.ValidationError({"detail": "user_host_id must be an integer."})
 
         for file in attachment_files:
             allowed_extensions = ["pdf", "doc", "docx"]

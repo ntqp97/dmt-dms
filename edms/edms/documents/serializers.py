@@ -15,7 +15,7 @@ from edms.organization.models import OrganizationUnit
 from edms.users.api.serializers import UserSerializer
 from edms.users.models import User
 
-myapp_logger = logging.getLogger("django")
+logger = logging.getLogger(__name__)
 
 
 class MarkAsReadSerializer(serializers.ModelSerializer):

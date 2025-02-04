@@ -209,19 +209,19 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         phone_number = data.get("phone_number", None)
         # validate phone number
         if User.objects.filter(phone_number=phone_number):
-            raise serializers.ValidationError({"phone_number": "unique"})
+            raise serializers.ValidationError({"detail": "phone_number unique"})
         # validate email
         if User.objects.filter(email=email):
-            raise serializers.ValidationError({"email": "unique"})
+            raise serializers.ValidationError({"detail": "email unique"})
         try:
             validate_email(email)
         except Exception:
-            raise serializers.ValidationError({"email": "invalid"})
+            raise serializers.ValidationError({"detail": "email invalid"})
 
         organization_unit_id = request.data.get("organization_unit_id", None)
         if organization_unit_id:
             if not OrganizationUnit.objects.filter(id=organization_unit_id).exists():
-                raise serializers.ValidationError({"organization_unit_id": "invalid"})
+                raise serializers.ValidationError({"detail": "organization_unit_id invalid"})
         return data
 
     def create(self, validated_data):
@@ -299,13 +299,13 @@ class UserChangePasswordSerializer(serializers.Serializer):
     def validate(self, data):
         user = self.context['request'].user
         if not user.check_password(data['current_password']):
-            raise serializers.ValidationError({"current_password": "The current password is incorrect"})
+            raise serializers.ValidationError({"detail": "The current password is incorrect"})
         if data["new_password"] == data["current_password"]:
             raise serializers.ValidationError(
-                {"new_password": "The new password cannot be the same as the current password."}
+                {"detail": "The new password cannot be the same as the current password."}
             )
         if data["new_password"] != data["new_password_confirm"]:
-            raise serializers.ValidationError({"new_password_confirm": "The new password confirmation does not match."})
+            raise serializers.ValidationError({"detail": "The new password confirmation does not match."})
         return data
 
 
