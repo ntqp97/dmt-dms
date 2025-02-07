@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from edms.assets.models import Asset
 from edms.assets.serializers import AssetSerializer
 from edms.common.pdf_helper import add_watermark_to_pdf
+import datetime
 from django.conf import settings
 
 from edms.common.permissions import IsOwnerOrAdmin
@@ -41,8 +42,8 @@ class AssetViewSet(
             region_name=settings.AWS_S3_REGION_NAME,
             bucket_name=settings.AWS_STORAGE_BUCKET_NAME,
         )
-
-        output_pdf = add_watermark_to_pdf(input_pdf, request.user.name, asset)
+        watermark_text = f"{request.user.name} - {request.user.citizen_identification} - {datetime.datetime.now().strftime('%d/%m/%Y')}"
+        output_pdf = add_watermark_to_pdf(input_pdf, watermark_text, asset)
 
         response = HttpResponse(output_pdf, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{asset.asset_name}_watermarked.pdf"'
