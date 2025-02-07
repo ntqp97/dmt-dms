@@ -27,10 +27,10 @@ class WebhookMySignAPIView(APIView):
             serializer = WebhookMySignRequestSerializer(data=request.data)
             if serializer.is_valid():
                 transaction_id = serializer.validated_data["transaction_id"]
-                logger.info("transaction_id", transaction_id)
-                logger.info("User", request.user)
+                logger.info(f"transaction_id: {transaction_id}")
+                logger.info(f"User: {request.user}")
                 document_signature = DocumentSignature.objects.get(transaction_id=transaction_id)
-                logger.info("document_signature", document_signature.id)
+                logger.info(f"document_signature {document_signature.id}")
                 if document_signature:
                     access_token = MySignHelper.login(
                         user_id=request.user.external_user_id,
@@ -51,7 +51,7 @@ class WebhookMySignAPIView(APIView):
                 else:
                     raise ValueError(f"No signer found for the transaction ID: {transaction_id}.")
         except Exception as e:
-            logger.error(e)
+            logger.error("Error: %s", e)
             return ErrorResponse(
                 str(e),
             ).failure_response()

@@ -25,7 +25,7 @@ class FirebaseService:
             response = devices.send_message(message)
             return {"success": True, "response": response}
         except (FirebaseError, ValueError) as e:
-            logger.error(str(e))
+            logger.error("Error: %s", e)
             raise Exception(e)
 
 

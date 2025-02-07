@@ -1,14 +1,19 @@
+import logging
 from typing import ClassVar
 
+import jwt
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+from django.conf import settings
+import datetime
 
 from ..common.basemodels import BaseModel
 from ..common.storage_backends import PublicMediaStorage
 from ..organization.models import OrganizationUnit
 from .managers import UserManager
+logger = logging.getLogger(__name__)
 
 
 def get_path_user_avatar(instance, filename):
@@ -103,6 +108,32 @@ class User(AbstractUser):
             is_default=is_default,
         )
 
+    @staticmethod
+    def verify_reset_token(token):
+        try:
+            data = jwt.decode(
+                token,
+                settings.SECRET_KEY,
+                leeway=datetime.timedelta(seconds=10),
+                algorithms=["HS256"]
+            )
+        except Exception as e:
+            logger.error("Error: %s", e)
+            return None
+        return User.objects.get(citizen_identification=data.get("citizen_identification"))
+
+    def get_reset_token(self):
+        expire_time = datetime.timedelta(seconds=settings.EXPIRED_TIME_VERIFY_EMAIL)
+        reset_token = jwt.encode(
+            {
+                "citizen_identification": self.citizen_identification,
+                "exp": datetime.datetime.now(tz=datetime.timezone.utc) + expire_time
+            },
+            settings.SECRET_KEY,
+            algorithm="HS256"
+        )
+        return reset_token
+
 
 class UserSignature(BaseModel):
     user = models.ForeignKey(
@@ -116,3 +147,22 @@ class UserSignature(BaseModel):
         on_delete=models.CASCADE,
     )
     is_default = models.BooleanField(default=False)
+
+
+class ForgotPasswordRequest(models.Model):
+    email = models.EmailField(blank=True, null=True)
+    ip_address = models.CharField(max_length=40, default=None, null=True, blank=True)
+    request_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+
+            models.Index(
+                fields=[
+                    "ip_address",
+                ]
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.email} - {self.ip_address}"

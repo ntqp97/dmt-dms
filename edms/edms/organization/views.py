@@ -15,10 +15,10 @@ class OrganizationUnitViewSet(viewsets.ModelViewSet):
     serializer_class = OrganizationUnitSerializer
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        serializer.save()
 
     def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)
+        serializer.save()
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:

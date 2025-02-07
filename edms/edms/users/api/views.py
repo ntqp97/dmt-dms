@@ -9,12 +9,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from edms.users.models import User
+from edms.users.models import User, ForgotPasswordRequest
 from .filters import UserFilter
 
 from ...common.app_status import AppResponse
 from ...common.app_status import ErrorResponse
-from ...common.helper import custom_error
+from ...common.helper import custom_error, get_client_ip, check_spam_forgot_password
+from ...common.mail_service import send_mail_forgot_password
 from ...common.pagination import StandardResultsSetPagination
 from ...common.permissions import IsOwnerOrAdmin
 from .serializers import (
@@ -24,6 +25,8 @@ from .serializers import (
     UserSerializer,
     UserChangePasswordSerializer,
     LogoutSerializer,
+    ForgotPasswordSerializer,
+    UserSetPasswordSerializer,
 )
 from ...search.filters import UnaccentSearchFilter
 
@@ -41,8 +44,8 @@ class UserViewSet(  # viewsets.ModelViewSet):
         "login": UserLoginSerializer,
         "update_signature": UpdateUserSignatureSerializer,
         "logout": LogoutSerializer,
-        # "resend_email": ResendEmailSerializer,
-        # "forgot_password": ForgotPasswordSerializer,
+        "forgot_password": ForgotPasswordSerializer,
+        "set_new_password": UserSetPasswordSerializer,
         "change_password": UserChangePasswordSerializer,
     }
     default_serializer_class = UserSerializer
@@ -192,6 +195,72 @@ class UserViewSet(  # viewsets.ModelViewSet):
         ).failure_response()
         return response
 
+    @action(
+        methods=["post"],
+        detail=False,
+        permission_classes=[AllowAny, ],
+        url_path="forgot-password"
+    )
+    def forgot_password(self, request):
+        serializer = self.get_serializer_class()(
+            data=request.data,
+            context=self.get_serializer_context()
+         )
+        email = request.data.get("email")
+        ip_address = get_client_ip(request)
+        if serializer.is_valid():
+            user = User.objects.filter(email=email).first()
+            if check_spam_forgot_password(ip_address):
+                return ErrorResponse(
+                    ["USER__REQUEST__BLOCK"]
+                ).failure_response()
+
+            ForgotPasswordRequest.objects.create(email=email, ip_address=ip_address)
+            send_mail_forgot_password(request.data.get("email"), user.get_reset_token())
+            response = Response(
+                AppResponse.SEND_MAIL.success_response,
+                status=AppResponse.SEND_MAIL.status_code
+            )
+        else:
+            response = ErrorResponse(
+                custom_error("USER", serializer.errors)
+            ).failure_response()
+        return response
+
+    @action(
+        methods=["post"],
+        detail=False,
+        permission_classes=[AllowAny, ],
+        url_path="set-password"
+    )
+    def set_new_password(self, request):
+        token = request.query_params.get("token", None)
+        if not token:
+            return ErrorResponse(
+                ["USER__TOKEN__REQUIRED"]
+            ).failure_response()
+
+        user = User.verify_reset_token(token)
+        if not user:
+            return ErrorResponse(
+                ["USER__TOKEN__INVALID"]
+            ).failure_response()
+        serializer = self.get_serializer_class()(
+            data=request.data,
+            context=self.get_serializer_context()
+        )
+        if serializer.is_valid():
+            user.set_password(request.data.get("new_password"))
+            user.save()
+            return Response(
+                AppResponse.CHANGE_PASSWORD.success_response,
+                status=AppResponse.CHANGE_PASSWORD.status_code
+            )
+
+        response = ErrorResponse(
+            custom_error("USER", serializer.errors)
+        ).failure_response()
+        return response
 
     @action(
         detail=False,

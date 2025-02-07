@@ -10,6 +10,7 @@ from edms.assets.serializers import AssetSerializer
 from edms.common.app_status import ErrorResponse
 from edms.common.upload_helper import validate_file_type
 from edms.organization.models import OrganizationUnit
+from edms.users.api.validates import validate_user
 from edms.users.models import User, UserSignature
 
 
@@ -325,3 +326,57 @@ class LogoutSerializer(serializers.Serializer):
         except TokenError:
             raise serializers.ValidationError(ErrorResponse(["USER__TOKEN__EXPIRED_OR_INVALID"]).failure_response())
 
+
+class ForgotPasswordSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(
+        required=True,
+        max_length=150,
+        min_length=3,
+        error_messages={
+           "blank": "empty",
+           "required": "required",
+           "max_length": "max_length",
+           "min_length": "min_length",
+        }
+    )
+
+    class Meta:
+        model = User
+        fields = ["email"]
+
+    def validate(self, data):
+        data = super().validate(data)
+        email = data.get("email", None)
+        filtered_user_by_email = User.objects.filter(email=email).first()
+        validate_user(filtered_user_by_email)
+        return data
+
+
+class UserSetPasswordSerializer(serializers.Serializer):
+    new_password = serializers.CharField(
+        required=True,
+        min_length=6,
+        max_length=100,
+        error_messages={
+            "blank": "empty",
+            "required": "required",
+            "max_length": "max_length",
+            "min_length": "min_length"
+        }
+    )
+    new_password_confirm = serializers.CharField(
+        required=True,
+        min_length=6,
+        max_length=100,
+        error_messages={
+            "blank": "empty",
+            "required": "required",
+            "max_length": "max_length",
+            "min_length": "min_length"
+        }
+    )
+
+    def validate(self, data):
+        if data["new_password"] != data["new_password_confirm"]:
+            raise serializers.ValidationError({"detail": "new_password_confirm not match"})
+        return data

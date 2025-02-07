@@ -1,4 +1,8 @@
 import json
+from django.utils import timezone
+from django.conf import settings
+
+from edms.users.models import ForgotPasswordRequest
 
 
 def custom_error(model_name, err):
@@ -26,3 +30,16 @@ def get_client_ip(request):
     else:
         ip = request.META.get("REMOTE_ADDR")
     return ip
+
+
+def check_spam_forgot_password(ip_address):
+    max_verify_time = timezone.now() - timezone.timedelta(
+        hours=settings.PERIOD_MAX_TIMES_REQUEST_FORGET_PASSWORD
+    )
+    num_request = ForgotPasswordRequest.objects.filter(
+        ip_address=ip_address,
+        request_at__gte=max_verify_time
+    ).count()
+    if num_request >= settings.MAX_TIMES_REQUEST_FORGET_PASSWORD:
+        return True
+    return False

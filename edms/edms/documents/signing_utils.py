@@ -67,7 +67,7 @@ class MySignHelper:
                 cert_list[item["credential_id"]] = item["cert"]
             return cert_list, access_token
         except Exception as e:
-            logger.error(e)
+            logger.error("Error: %s", e)
         return cert_list, access_token
 
     @staticmethod
@@ -89,7 +89,7 @@ class MySignHelper:
 
             return sign_hash_response
         except Exception as e:
-            logger.error(e)
+            logger.error("Error: %s", e)
         return None
 
     @staticmethod

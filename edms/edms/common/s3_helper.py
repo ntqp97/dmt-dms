@@ -23,7 +23,7 @@ class S3FileManager:
             )
             return s3
         except ClientError as e:
-            logger.error(e)
+            logger.error("Error: %s", e)
             return None
 
     @staticmethod
@@ -36,7 +36,7 @@ class S3FileManager:
                 s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration=location)
             return True
         except ClientError as e:
-            logger.error(e)
+            logger.error("Error: %s", e)
             return False
 
     @staticmethod

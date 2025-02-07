@@ -32,7 +32,7 @@ class ReviewMeetingScheduleSerializer(serializers.Serializer):
         try:
             instance.update_status(validated_data.get('status', instance.status), user)
         except Exception as e:
-            logger.error(str(e))
+            logger.error("Error: %s", e)
             raise serializers.ValidationError({"detail": str(e)})
         instance.note = validated_data.get('note', instance.note)
         instance.updated_by = validated_data.get('updated_by', instance.updated_by)
