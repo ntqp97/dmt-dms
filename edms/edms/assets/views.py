@@ -5,7 +5,9 @@ from rest_framework import mixins
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
+from edms.common.app_status import AppResponse
 from edms.assets.models import Asset
 from edms.assets.serializers import AssetSerializer
 from edms.common.pdf_helper import add_watermark_to_pdf
@@ -13,6 +15,7 @@ import datetime
 from django.conf import settings
 
 from edms.common.permissions import IsOwnerOrAdmin
+from edms.documents.models import Document
 
 
 class AssetViewSet(
@@ -26,6 +29,16 @@ class AssetViewSet(
         if self.action in ["destroy"]:
             self.permission_classes = [IsOwnerOrAdmin]
         return super(self.__class__, self).get_permissions()
+
+    def destroy(self, request, *args, **kwargs):
+        asset = self.get_object()
+        if asset.document and asset.document.document_category != Document.SIGNING_DOCUMENT:
+            return Response(
+                AppResponse.DELETE_ASSETS_FAILURE.failure_response,
+                status=AppResponse.DELETE_ASSETS_FAILURE.status_code
+            )
+
+        return super().destroy(request, *args, **kwargs)
 
     @action(
         methods=['GET'],

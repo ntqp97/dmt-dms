@@ -30,6 +30,8 @@ class AppResponse(Enum):
     UPDATE_MEETING_SCHEDULE_FAILURE = status.HTTP_400_BAD_REQUEST, "MEETING_SCHEDULE__UPDATE__FAILURE"
     DELETE_MEETING_SCHEDULE = status.HTTP_200_OK, "MEETING_SCHEDULE__DELETE__SUCCESS"
 
+    DELETE_ASSETS_FAILURE = status.HTTP_400_BAD_REQUEST, "ASSETS__DELETE__FAILURE"
+
     @property
     def status_code(self):
         return self.value[0]

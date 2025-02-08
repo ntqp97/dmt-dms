@@ -1,3 +1,4 @@
+import math
 import os
 
 from PyPDF2 import PdfReader, PdfWriter
@@ -7,12 +8,14 @@ from reportlab.lib.colors import Color
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.utils import simpleSplit
 import io
 from django.conf import settings
 
 
 def add_watermark_to_pdf(input_pdf, watermark_text, asset):
     from edms.documents.models import Document
+    reader = PdfReader(input_pdf)
 
     font_dir = os.path.join(settings.BASE_DIR, 'edms', 'static', 'fonts')
     pdfmetrics.registerFont(TTFont('DejaVu', f'{font_dir}/DejaVuSans.ttf'))
@@ -21,13 +24,18 @@ def add_watermark_to_pdf(input_pdf, watermark_text, asset):
     packet = io.BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
 
-    can.setFont("DejaVu", 50)
+    can.setFont("DejaVu", 40)
+    lines = split_text(watermark_text, "DejaVu", 40, get_diagonal(reader.pages[0]))
+
     can.setFillColor(Color(0.5, 0.5, 0.5, alpha=0.3))
 
     can.saveState()
     can.translate(300, 400)
     can.rotate(45)
-    can.drawCentredString(0, 0, watermark_text)
+    y_offset = 0
+    for line in lines:
+        can.drawCentredString(0, y_offset, line)
+        y_offset -= 40
     can.restoreState()
 
     if asset.file_type == "signature_file" and asset.document.document_category == Document.SIGNING_DOCUMENT:
@@ -51,7 +59,6 @@ def add_watermark_to_pdf(input_pdf, watermark_text, asset):
     packet.seek(0)
     watermark_pdf = PdfReader(packet)
 
-    reader = PdfReader(input_pdf)
     writer = PdfWriter()
     pages_signatures_map = stamp_signatures_to_pdf(asset, reader.pages)
 
@@ -67,6 +74,17 @@ def add_watermark_to_pdf(input_pdf, watermark_text, asset):
     writer.write(output_pdf)
     output_pdf.seek(0)
     return output_pdf
+
+
+def get_diagonal(first_page):
+    width = float(first_page.mediabox.upper_right[0])
+    height = float(first_page.mediabox.upper_right[1])
+    return math.sqrt(width**2 + height**2) * 0.9
+
+
+def split_text(text, font_name, font_size, max_width):
+    lines = simpleSplit(text, font_name, font_size, max_width)
+    return lines
 
 
 def convert_float_objects_to_floats(coords):
