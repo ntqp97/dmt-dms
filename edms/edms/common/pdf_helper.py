@@ -90,8 +90,8 @@ def stamp_signatures_to_pdf(asset, pages):
 
         for signer_position, coordinates in signers_dict.items():
             document_signature = asset.document.signatures.filter(
-                order=signer_position,
-                is_signature_visible=True).first()
+                order=signer_position
+            ).first()
             if not document_signature:
                 continue
 
