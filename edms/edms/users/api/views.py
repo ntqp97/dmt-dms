@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework.generics import get_object_or_404
 
 from edms.users.models import User, ForgotPasswordRequest
 from .filters import UserFilter
@@ -286,3 +287,33 @@ class UserViewSet(  # viewsets.ModelViewSet):
                 custom_error("USER", serializer.errors),
             ).failure_response()
         return response
+
+    @action(
+        methods=["post"],
+        detail=True,
+        permission_classes=[IsAdminUser, ],
+        url_path="disable"
+    )
+    def disable(self, request, *args, **kwargs):
+        obj = get_object_or_404(self.get_queryset(), id=kwargs.get("pk"))
+        obj.is_active = False
+        obj.save()
+        return Response(
+            AppResponse.DISABLE_ACCOUNT.success_response,
+            status=AppResponse.DISABLE_ACCOUNT.status_code
+        )
+
+    @action(
+        methods=["post"],
+        detail=True,
+        permission_classes=[IsAdminUser, ],
+        url_path="enable"
+    )
+    def enable(self, request, *args, **kwargs):
+        obj = get_object_or_404(self.get_queryset(), id=kwargs.get("pk"))
+        obj.is_active = True
+        obj.save()
+        return Response(
+            AppResponse.ENABLE_ACCOUNT.success_response,
+            status=AppResponse.ENABLE_ACCOUNT.status_code
+        )
