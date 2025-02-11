@@ -105,7 +105,7 @@ class UserViewSet(  # viewsets.ModelViewSet):
     @action(
         methods=["post"],
         detail=False,
-        permission_classes=[IsAdminUser],
+        permission_classes=[AllowAny],
         url_path="register",
     )
     def register(self, request):
