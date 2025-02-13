@@ -12,6 +12,7 @@ from edms.common.upload_helper import validate_file_type
 from edms.organization.models import OrganizationUnit
 from edms.users.api.validates import validate_user
 from edms.users.models import User, UserSignature
+import re
 
 
 class UpdateUserSignatureSerializer(serializers.ModelSerializer):
@@ -231,7 +232,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
 
 class UserLoginSerializer(serializers.Serializer):
-    email = serializers.EmailField(
+    email = serializers.CharField(
         max_length=150,
         min_length=3,
         error_messages={
@@ -253,12 +254,35 @@ class UserLoginSerializer(serializers.Serializer):
         },
     )
 
+    def get_user_filter(self, identifier):
+        email_regex = r"[^@]+@[^@]+\.[^@]+"
+        phone_regex = r"^\+?\d{9,15}$"  # Hỗ trợ số điện thoại với + và từ 9-15 số
+
+        if re.match(email_regex, identifier):
+            return {"email": identifier}
+        elif re.match(phone_regex, identifier):
+            return {"phone_number": identifier}
+        else:
+            raise AuthenticationFailed("Invalid email or phone number format")
+
     def validate(self, data):
         email = data.get("email")
         password = data.get("password")
-        user = authenticate(email=email, password=password)
+        user_filter = self.get_user_filter(email)
+        try:
+            user = User.objects.get(**user_filter)
+        except User.DoesNotExist:
+            raise AuthenticationFailed("Invalid username/password or Inactive Account.")
+
         if user is None:
             raise AuthenticationFailed("Invalid email/password or Inactive Account.")
+
+        if not user.check_password(password):
+            raise AuthenticationFailed("Invalid username/password or Inactive Account.")
+
+        if not user.is_active:
+            raise AuthenticationFailed("User account is inactive.")
+
         return user
 
 
