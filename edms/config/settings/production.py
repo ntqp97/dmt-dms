@@ -18,7 +18,7 @@ from .base import env
 # https://docs.djangoproject.com/en/dev/ref/settings/#secret-key
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 # https://docs.djangoproject.com/en/dev/ref/settings/#allowed-hosts
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["dmt-edms.com"])
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["myeoffices.com"])
 
 # DATABASES
 # ------------------------------------------------------------------------------
@@ -73,67 +73,75 @@ SECURE_CONTENT_TYPE_NOSNIFF = env.bool(
 # STORAGES
 # ------------------------------------------------------------------------------
 # https://django-storages.readthedocs.io/en/latest/#installation
-INSTALLED_APPS += ["storages"]
-# https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
-AWS_ACCESS_KEY_ID = env("DJANGO_AWS_ACCESS_KEY_ID")
-# https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
-AWS_SECRET_ACCESS_KEY = env("DJANGO_AWS_SECRET_ACCESS_KEY")
-# https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
-AWS_STORAGE_BUCKET_NAME = env("DJANGO_AWS_STORAGE_BUCKET_NAME")
-# https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
-AWS_QUERYSTRING_AUTH = False
-# DO NOT change these unless you know what you're doing.
-_AWS_EXPIRY = 60 * 60 * 24 * 7
-# https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
-AWS_S3_OBJECT_PARAMETERS = {
-    "CacheControl": f"max-age={_AWS_EXPIRY}, s-maxage={_AWS_EXPIRY}, must-revalidate",
-}
-# https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
-AWS_S3_MAX_MEMORY_SIZE = env.int(
-    "DJANGO_AWS_S3_MAX_MEMORY_SIZE",
-    default=100_000_000,  # 100MB
-)
-# https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
-AWS_S3_REGION_NAME = env("DJANGO_AWS_S3_REGION_NAME", default=None)
-# https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#cloudfront
-AWS_S3_CUSTOM_DOMAIN = env("DJANGO_AWS_S3_CUSTOM_DOMAIN", default=None)
-aws_s3_domain = AWS_S3_CUSTOM_DOMAIN or f"{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com"
-# STATIC & MEDIA
-# ------------------------
-STORAGES = {
-    "default": {
-        "BACKEND": "storages.backends.s3.S3Storage",
-        "OPTIONS": {
-            "location": "media",
-            "file_overwrite": False,
-        },
-    },
-    "staticfiles": {
-        "BACKEND": "storages.backends.s3.S3Storage",
-        "OPTIONS": {
-            "location": "static",
-            "default_acl": "public-read",
-        },
-    },
-}
-MEDIA_URL = f"https://{aws_s3_domain}/media/"
-COLLECTFASTA_STRATEGY = "collectfasta.strategies.boto3.Boto3Strategy"
-STATIC_URL = f"https://{aws_s3_domain}/static/"
+USE_S3 = env("USE_S3")
+if str(USE_S3).lower() in ["true"]:
+    INSTALLED_APPS += ["storages"]
+    # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
+    AWS_ACCESS_KEY_ID = env("DJANGO_AWS_ACCESS_KEY_ID")
+    # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
+    AWS_SECRET_ACCESS_KEY = env("DJANGO_AWS_SECRET_ACCESS_KEY")
+    # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
+    AWS_STORAGE_BUCKET_NAME = env("DJANGO_AWS_STORAGE_BUCKET_NAME")
+    # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
+    AWS_QUERYSTRING_AUTH = True
+    # DO NOT change these unless you know what you're doing.
+    _AWS_EXPIRY = 60 * 60 * 24 * 7
+    # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
+    AWS_S3_OBJECT_PARAMETERS = {
+        "CacheControl": f"max-age={_AWS_EXPIRY}, s-maxage={_AWS_EXPIRY}, must-revalidate",
+    }
+    # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
+    AWS_S3_MAX_MEMORY_SIZE = env.int(
+        "DJANGO_AWS_S3_MAX_MEMORY_SIZE",
+        default=10485760,  # 10MB
+    )
+    # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
+    AWS_S3_REGION_NAME = env("DJANGO_AWS_S3_REGION_NAME", default=None)
+    # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#cloudfront
+    # AWS_S3_CUSTOM_DOMAIN = env("DJANGO_AWS_S3_CUSTOM_DOMAIN", default=None)
+    # aws_s3_domain = AWS_S3_CUSTOM_DOMAIN or f"{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com"
+    # AWS_S3_ENDPOINT_URL = f"https://{aws_s3_domain}"
+    # AWS_S3_SIGNATURE_VERSION = 's3v4'
+    AWS_S3_USE_SSL = True
+    AWS_S3_VERIFY = True
+    # STATIC & MEDIA
+    # ------------------------
+    # STORAGES = {
+    #     "default": {
+    #         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    #         "OPTIONS": {
+    #             "location": "media",
+    #             "file_overwrite": True,
+    #         },
+    #     },
+    #     "staticfiles": {
+    #         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    #         "OPTIONS": {
+    #             "location": "static",
+    #             "default_acl": "public-read",
+    #         },
+    #     },
+    # }
+
+    DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+    # MEDIA_URL = f"https://{aws_s3_domain}/media/"
+    # COLLECTFASTA_STRATEGY = "collectfasta.strategies.boto3.Boto3Strategy"
+    # STATIC_URL = f"https://{aws_s3_domain}/static/"
 
 # EMAIL
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#default-from-email
-DEFAULT_FROM_EMAIL = env(
-    "DJANGO_DEFAULT_FROM_EMAIL",
-    default="EDMS <noreply@dmt-edms.com>",
-)
-# https://docs.djangoproject.com/en/dev/ref/settings/#server-email
-SERVER_EMAIL = env("DJANGO_SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
-# https://docs.djangoproject.com/en/dev/ref/settings/#email-subject-prefix
-EMAIL_SUBJECT_PREFIX = env(
-    "DJANGO_EMAIL_SUBJECT_PREFIX",
-    default="[EDMS] ",
-)
+# DEFAULT_FROM_EMAIL = env(
+#     "DJANGO_DEFAULT_FROM_EMAIL",
+#     default="EDMS <noreply@dmt-edms.com>",
+# )
+# # https://docs.djangoproject.com/en/dev/ref/settings/#server-email
+# SERVER_EMAIL = env("DJANGO_SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
+# # https://docs.djangoproject.com/en/dev/ref/settings/#email-subject-prefix
+# EMAIL_SUBJECT_PREFIX = env(
+#     "DJANGO_EMAIL_SUBJECT_PREFIX",
+#     default="[EDMS] ",
+# )
 
 # ADMIN
 # ------------------------------------------------------------------------------
@@ -143,20 +151,20 @@ ADMIN_URL = env("DJANGO_ADMIN_URL")
 # Anymail
 # ------------------------------------------------------------------------------
 # https://anymail.readthedocs.io/en/stable/installation/#installing-anymail
-INSTALLED_APPS += ["anymail"]
+# INSTALLED_APPS += ["anymail"]
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-backend
 # https://anymail.readthedocs.io/en/stable/installation/#anymail-settings-reference
 # https://anymail.readthedocs.io/en/stable/esps/sendgrid/
-EMAIL_BACKEND = "anymail.backends.sendgrid.EmailBackend"
-ANYMAIL = {
-    "SENDGRID_API_KEY": env("SENDGRID_API_KEY"),
-    "SENDGRID_API_URL": env("SENDGRID_API_URL", default="https://api.sendgrid.com/v3/"),
-}
+# EMAIL_BACKEND = "anymail.backends.sendgrid.EmailBackend"
+# ANYMAIL = {
+#     "SENDGRID_API_KEY": env("SENDGRID_API_KEY"),
+#     "SENDGRID_API_URL": env("SENDGRID_API_URL", default="https://api.sendgrid.com/v3/"),
+# }
 
 # Collectfasta
 # ------------------------------------------------------------------------------
 # https://github.com/jasongi/collectfasta#installation
-INSTALLED_APPS = ["collectfasta", *INSTALLED_APPS]
+# INSTALLED_APPS = ["collectfasta", *INSTALLED_APPS]
 
 # LOGGING
 # ------------------------------------------------------------------------------
@@ -222,7 +230,7 @@ sentry_sdk.init(
 # -------------------------------------------------------------------------------
 # Tools that generate code samples can use SERVERS to point to the correct domain
 SPECTACULAR_SETTINGS["SERVERS"] = [
-    {"url": "https://dmt-edms.com", "description": "Production server"},
+    {"url": "https://api-dmt.myeoffices.com", "description": "Production server"},
 ]
 # Your stuff...
 # ------------------------------------------------------------------------------

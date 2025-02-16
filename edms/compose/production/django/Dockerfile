@@ -9,6 +9,7 @@ ARG BUILD_ENVIRONMENT=production
 
 # Install apt packages
 RUN apt-get update && apt-get install --no-install-recommends -y \
+  sudo git bash-completion nano ssh \
   # dependencies for building Python packages
   build-essential \
   # psycopg dependencies
@@ -87,10 +88,5 @@ COPY --chown=django:django . ${APP_HOME}
 RUN chown -R django:django ${APP_HOME}
 
 USER django
-
-RUN DATABASE_URL="" \
-  CELERY_BROKER_URL="" \
-  DJANGO_SETTINGS_MODULE="config.settings.test" \
-  python manage.py compilemessages
 
 ENTRYPOINT ["/entrypoint"]

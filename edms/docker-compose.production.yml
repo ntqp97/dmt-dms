@@ -2,9 +2,7 @@ volumes:
   production_postgres_data: {}
   production_postgres_data_backups: {}
   production_traefik: {}
-  
   production_redis_data: {}
-  
 
 
 services:
@@ -20,6 +18,8 @@ services:
     env_file:
       - ./.envs/.production/.django
       - ./.envs/.production/.postgres
+    ports:
+      - '8000:5000'
     command: /start
 
   postgres:
@@ -40,6 +40,7 @@ services:
     image: edms_production_traefik
     depends_on:
       - django
+      - frontend
     volumes:
       - production_traefik:/etc/traefik/acme
     ports:
@@ -49,31 +50,36 @@ services:
 
   redis:
     image: docker.io/redis:6
-    
     volumes:
       - production_redis_data:/data
-    
 
-  celeryworker:
-    <<: *django
-    image: edms_production_celeryworker
-    command: /start-celeryworker
+  frontend:
+    image: ntqp97/dmt-web-app:0.0.1
+    ports:
+      - '8001:80'
+    depends_on:
+      - django
 
-  celerybeat:
-    <<: *django
-    image: edms_production_celerybeat
-    command: /start-celerybeat
-
-  flower:
-    <<: *django
-    image: edms_production_flower
-    command: /start-flower
-
-  awscli:
-    build:
-      context: .
-      dockerfile: ./compose/production/aws/Dockerfile
-    env_file:
-      - ./.envs/.production/.django
-    volumes:
-      - production_postgres_data_backups:/backups:z
+#  celeryworker:
+#    <<: *django
+#    image: edms_production_celeryworker
+#    command: /start-celeryworker
+#
+#  celerybeat:
+#    <<: *django
+#    image: edms_production_celerybeat
+#    command: /start-celerybeat
+#
+#  flower:
+#    <<: *django
+#    image: edms_production_flower
+#    command: /start-flower
+#
+#  awscli:
+#    build:
+#      context: .
+#      dockerfile: ./compose/production/aws/Dockerfile
+#    env_file:
+#      - ./.envs/.production/.django
+#    volumes:
+#      - production_postgres_data_backups:/backups:z
